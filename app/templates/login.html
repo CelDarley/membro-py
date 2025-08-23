@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Login</title>
+	<style>
+		body { font-family: system-ui, sans-serif; padding: 24px; }
+		.card { max-width: 420px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+		.card-body { padding: 16px; display: grid; gap: 12px; }
+		.input { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
+		.btn { padding: 8px 12px; border: 1px solid #334155; background: #334155; color: #fff; border-radius: 6px; cursor:pointer }
+		.msg { color: #b91c1c }
+		.link { color:#2563eb; cursor:pointer; text-decoration:underline; text-align:center }
+		.modal { position: fixed; inset:0; background: rgba(0,0,0,.5); display:none; align-items:center; justify-content:center }
+		.modal-inner { background: #fff; border-radius:8px; padding: 20px; width: 95%; max-width: 420px; max-height: 90vh; overflow: auto; overflow-x: hidden }
+		.input-wrap { position: relative }
+		.toggle-eye { position:absolute; right:10px; top:50%; transform: translateY(-50%); border:none; background:transparent; cursor:pointer; padding:0; display:inline-flex; align-items:center; color:#64748b }
+		.toggle-eye:hover { color:#334155 }
+		.toggle-eye svg { width:20px; height:20px }
+	</style>
+</head>
+<body>
+	<div class="card">
+		<div class="card-body">
+			<h2 style="margin:0">Login</h2>
+			<input id="email" class="input" placeholder="Email" />
+			<div class="input-wrap">
+				<input id="password" class="input" placeholder="Senha" type="password" />
+				<button id="btnEye" class="toggle-eye" type="button" onclick="togglePwd()" aria-label="Mostrar/ocultar senha"></button>
+			</div>
+			<button class="btn" onclick="login()">Entrar</button>
+			<div class="link" onclick="openForgot()">Esqueci a senha</div>
+			<div id="msg" class="msg"></div>
+		</div>
+	</div>
+
+	<div class="modal" id="forgotModal">
+		<div class="modal-inner">
+			<div style="display:flex; justify-content:space-between; align-items:center"><strong>Esqueci a senha</strong>
+				<div style="display:flex; gap:8px">
+					<button class="btn" onclick="sendForgot()">Enviar código</button>
+					<button class="btn" onclick="closeForgot()">Fechar</button>
+				</div>
+			</div>
+			<div class="card-body" style="gap:8px">
+				<input id="fpEmail" class="input" placeholder="Seu e-mail" />
+				<div id="fpMsg" class="msg"></div>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal" id="resetModal">
+		<div class="modal-inner">
+			<div style="display:flex; justify-content:space-between; align-items:center"><strong>Confirmar código</strong>
+				<div style="display:flex; gap:8px">
+					<button class="btn" onclick="doReset()">Redefinir senha</button>
+					<button class="btn" onclick="closeReset()">Fechar</button>
+				</div>
+			</div>
+			<div class="card-body" style="gap:8px">
+				<input id="rpEmail" class="input" placeholder="Email" />
+				<input id="rpCode" class="input" placeholder="Código recebido" />
+				<input id="rpNew" class="input" placeholder="Nova senha" type="password" />
+				<input id="rpConfirm" class="input" placeholder="Confirmar nova senha" type="password" />
+				<div id="rpMsg" class="msg"></div>
+			</div>
+		</div>
+	</div>
+
+	<script>
+	const eyeSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg>`
+	const eyeOffSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.8 21.8 0 0 1 5.06-5.94"></path><path d="M1 1l22 22"></path><path d="M9.88 9.88A3 3 0 0 0 12 15a3 3 0 0 0 2.12-.88"></path><path d="M14.12 14.12L9.88 9.88"></path></svg>`
+
+	async function login() {
+		const email = document.getElementById('email').value.trim()
+		const password = document.getElementById('password').value
+		document.getElementById('msg').textContent = ''
+		try {
+			const r = await fetch('/api/auth/login', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ email, password }) })
+			const data = await r.json()
+			if (!r.ok) throw new Error(data?.message || 'Falha no login')
+			localStorage.setItem('token', data.token)
+			location.href = '/'
+		} catch(e) {
+			document.getElementById('msg').textContent = e.message
+		}
+	}
+	function renderEye(){ const btn=document.getElementById('btnEye'); if(!btn) return; const el=document.getElementById('password'); btn.innerHTML = (el?.type==='password') ? eyeSvg : eyeOffSvg }
+	function togglePwd(){ const el=document.getElementById('password'); if(!el) return; el.type = el.type==='password' ? 'text' : 'password'; renderEye() }
+	document.addEventListener('DOMContentLoaded', renderEye)
+	function openForgot(){ document.getElementById('fpEmail').value = document.getElementById('email').value.trim(); document.getElementById('fpMsg').textContent=''; document.getElementById('forgotModal').style.display='flex' }
+	function closeForgot(){ document.getElementById('forgotModal').style.display='none' }
+	async function sendForgot(){ const email=document.getElementById('fpEmail').value.trim(); document.getElementById('fpMsg').textContent=''; if(!email){ document.getElementById('fpMsg').textContent='Informe o e-mail'; return } const r=await fetch('/api/auth/forgot-password', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ email }) }); if(r.ok){ document.getElementById('fpMsg').textContent='Se o e-mail existir, enviaremos um código.'; closeForgot(); openReset(email) } else { try{ const d=await r.json(); document.getElementById('fpMsg').textContent=d?.message||'Falha ao enviar' }catch{ document.getElementById('fpMsg').textContent='Falha ao enviar' } }
+	}
+	function openReset(email){ document.getElementById('rpEmail').value=email||''; document.getElementById('rpCode').value=''; document.getElementById('rpNew').value=''; document.getElementById('rpConfirm').value=''; document.getElementById('rpMsg').textContent=''; document.getElementById('resetModal').style.display='flex' }
+	function closeReset(){ document.getElementById('resetModal').style.display='none' }
+	async function doReset(){ const email=document.getElementById('rpEmail').value.trim(); const code=document.getElementById('rpCode').value.trim(); const new_password=document.getElementById('rpNew').value; const confirm=document.getElementById('rpConfirm').value; document.getElementById('rpMsg').textContent=''; const r=await fetch('/api/auth/reset-password', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ email, code, new_password, confirm }) }); if(r.ok){ document.getElementById('rpMsg').textContent='Senha redefinida com sucesso'; setTimeout(()=>{ closeReset() }, 1200) } else { try{ const d=await r.json(); document.getElementById('rpMsg').textContent=d?.message||'Falha ao redefinir' }catch{ document.getElementById('rpMsg').textContent='Falha ao redefinir' } }
+	}
+	</script>
+</body>
+</html> 

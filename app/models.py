@@ -1,26 +1,38 @@
 from .db import db
+from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy.dialects.mysql import BIGINT as MySQLBigInt
 
 
 membro_amigos = db.Table(
 	'membro_amigos',
-	db.Column('membro_id', db.Integer, db.ForeignKey('membros.id'), primary_key=True),
-	db.Column('amigo_id', db.Integer, db.ForeignKey('membros.id'), primary_key=True),
+	db.Column('membro_id', MySQLBigInt(unsigned=True), db.ForeignKey('membros.id'), primary_key=True),
+	db.Column('amigo_id', MySQLBigInt(unsigned=True), db.ForeignKey('membros.id'), primary_key=True),
 )
 
 
 class User(db.Model):
-	__tablename__ = 'users'
-	id = db.Column(db.Integer, primary_key=True)
+	__tablename__ = 'users_py'
+	id = db.Column(MySQLBigInt(unsigned=True), primary_key=True)
 	name = db.Column(db.String(191), nullable=False)
 	email = db.Column(db.String(191), unique=True, nullable=False)
 	password_hash = db.Column(db.String(191), nullable=False)
 	role = db.Column(db.String(32), default='user', nullable=False)
 	two_factor_enabled = db.Column(db.Boolean, default=False)
+	phone = db.Column(db.String(50))
+	active = db.Column(db.Boolean, default=True, nullable=False)
+	reset_code = db.Column(db.String(10))
+	reset_expires_at = db.Column(db.DateTime)
+
+	def set_password(self, raw: str) -> None:
+		self.password_hash = generate_password_hash(raw)
+
+	def check_password(self, raw: str) -> bool:
+		return check_password_hash(self.password_hash, raw)
 
 
 class Membro(db.Model):
 	__tablename__ = 'membros'
-	id = db.Column(db.Integer, primary_key=True)
+	id = db.Column(MySQLBigInt(unsigned=True), primary_key=True)
 	nome = db.Column(db.String(255), index=True)
 	sexo = db.Column(db.String(50))
 	concurso = db.Column(db.String(50))
@@ -49,4 +61,12 @@ class Membro(db.Model):
 		secondaryjoin=id == membro_amigos.c.amigo_id,
 		backref='amigos_de',
 		lazy='dynamic',
-	) 
+	)
+
+
+class Lookup(db.Model):
+	__tablename__ = 'lookups'
+	id = db.Column(MySQLBigInt(unsigned=True), primary_key=True)
+	type = db.Column(db.String(64), index=True, nullable=False)
+	value = db.Column(db.String(255), nullable=False)
+	__table_args__ = (db.UniqueConstraint('type', 'value', name='uq_lookups_type_value'),) 

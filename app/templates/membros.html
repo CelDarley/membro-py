@@ -1,0 +1,563 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Membros</title>
+	<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+	<style>
+		body { font-family: system-ui, sans-serif; padding: 16px; }
+		.toolbar { display:flex; gap:8px; align-items:center; margin-bottom:12px }
+		.input { padding: 8px; border:1px solid #cbd5e1; border-radius:6px; width: 100% }
+		.input, select { box-sizing: border-box }
+		.btn { padding: 8px 12px; border: 1px solid #334155; background: #334155; color: #fff; border-radius: 6px; cursor:pointer }
+		.table-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 6px }
+		table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; table-layout: fixed }
+		.table th, .table td { border:1px solid #e2e8f0; padding:8px; font-size: 14px; min-width: 160px; background: #fff }
+		.table th { background:#f1f5f9; cursor:pointer; user-select:none; position: sticky; top: 0; z-index: 5 }
+		.freeze-left { position: sticky; left: 0; z-index: 6; box-shadow: 2px 0 0 #e2e8f0; background: #fff }
+		/* garantir que o cabeçalho da primeira coluna também congele acima das demais */
+		.table th.freeze-left { left: 0; position: sticky; z-index: 10; background: #f1f5f9 }
+		.freeze-right { position: sticky; right: 0; z-index: 6; box-shadow: -2px 0 0 #e2e8f0; background: #fff }
+		/* modal, grids, abas, toasts, chips, suggest ... */
+		.modal { position: fixed; inset:0; background: rgba(0,0,0,.5); display:none; align-items:center; justify-content:center }
+		.modal-inner { background: #fff; border-radius:8px; padding: 20px; width: 95%; max-width: 1300px; max-height: 90vh; overflow: auto; overflow-x: hidden }
+		.grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(320px,1fr)); align-items: stretch }
+		.card { border:1px solid #e2e8f0; border-radius:8px }
+		.card-body { padding: 12px }
+		.form-grid { display:grid; column-gap: 24px; row-gap: 12px; grid-template-columns: repeat(auto-fit, minmax(380px,1fr)) }
+		.label { font-weight:600 }
+		.row { display:grid; gap:8px }
+		/* abas */
+		.tabs { display:flex; gap:8px; margin: 12px 0 }
+		.tab { padding:8px 12px; border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a; border-radius:6px; cursor:pointer }
+		.tab.active { background:#334155; color:#fff; border-color:#334155 }
+		/* paginação */
+		.pager { display:flex; gap:8px; align-items:center; justify-content:flex-end; margin-top:8px }
+		.pager .btn { background:#64748b; border-color:#64748b }
+		/* indicador de filtro ativo */
+		.filter-badge { margin-left:6px; background:#334155; color:#fff; border-radius:999px; font-size:11px; padding:2px 6px; }
+		/* perfil */
+		.profile { margin-left:auto; position:relative }
+		.profile-btn { display:flex; align-items:center; gap:8px; padding:6px 10px; border:1px solid #cbd5e1; background:#fff; color:#0f172a; border-radius:999px; cursor:pointer }
+		.avatar { width:28px; height:28px; border-radius:999px; background:#334155; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:600 }
+		.dropdown { position:absolute; right:0; top:40px; background:#fff; border:1px solid #cbd5e1; border-radius:8px; min-width:260px; box-shadow:0 8px 24px rgba(0,0,0,.08); display:none; z-index:50 }
+		.dropdown .item { padding:10px 12px; border-bottom:1px solid #e2e8f0 }
+		.dropdown .item:last-child { border-bottom:none }
+		.dropdown .name { font-weight:600; color:#0f172a }
+		.dropdown .email { font-size:12px; color:#475569; word-break:break-all }
+		/* toasts */
+		#toasts { position: fixed; right: 16px; top: 16px; display: grid; gap: 8px; z-index: 9999 }
+		.toast { padding: 10px 12px; border-radius: 8px; color: #0f172a; background: #e2e8f0; border: 1px solid #cbd5e1; box-shadow: 0 4px 16px rgba(0,0,0,.08) }
+		.toast.success { background:#ecfdf5; border-color:#10b981; color:#065f46 }
+		.toast.error { background:#fef2f2; border-color:#ef4444; color:#7f1d1d }
+		.chips { display:flex; flex-wrap:wrap; gap:6px }
+		.chip { display:flex; align-items:center; gap:6px; padding:4px 8px; background:#e2e8f0; border:1px solid #cbd5e1; border-radius:999px }
+		.chip button { border:none; background:transparent; cursor:pointer; color:#7f1d1d; font-weight:600 }
+		.suggest { border:1px solid #cbd5e1; background:#fff; max-height:200px; overflow:auto; border-radius:6px; margin-top:6px }
+		.suggest div { padding:6px 8px; cursor:pointer }
+		.suggest div:hover { background:#f1f5f9 }
+		/* garantir modais de filtro no topo */
+		#filterModal { z-index: 10001 }
+		/* elevar camadas das modais e colocar a modal de "Ver" acima de tudo */
+		.modal { z-index: 10000 }
+		#modal { z-index: 10002 }
+		#userPwdModal { z-index: 10002 }
+		.icon-btn { border:none; background:transparent; cursor:pointer; padding:0; margin-left:8px; display:inline-flex; align-items:center; vertical-align:middle }
+		.icon-btn svg { width:16px; height:16px; color:#64748b }
+		.icon-btn:hover svg { color:#334155 }
+		/* coluna de ações na gestão de usuários */
+		.btn-col { display:flex; flex-direction:column; gap:4px }
+	</style>
+</head>
+<body>
+	<div id="toasts"></div>
+	<div class="toolbar">
+		<input id="q" class="input" placeholder="Buscar..." list="suggestions" oninput="onMainInput()" />
+		<datalist id="suggestions"></datalist>
+		<button class="btn" onclick="search()">Pesquisar</button>
+		<div class="profile" id="profile">
+			<button class="profile-btn" onclick="toggleProfile()">
+				<div class="avatar" id="avatar">?</div>
+				<span id="profileName" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">Usuário</span>
+			</button>
+			<div class="dropdown" id="profileMenu">
+				<div class="item">
+					<div class="name" id="menuName">Usuário</div>
+					<div class="email" id="menuEmail">email@example.com</div>
+				</div>
+				<div class="item"><button class="btn" style="width:100%" onclick="openSelfPwd()">Trocar senha</button></div>
+				<div class="item"><button class="btn" style="width:100%" onclick="doLogout()">Sair</button></div>
+			</div>
+		</div>
+	</div>
+
+	<div class="tabs">
+		<button id="tabTable" class="tab active" onclick="showTab('table')">Tabela</button>
+		<button id="tabCharts" class="tab" onclick="showTab('charts')">Gráficos</button>
+		<button id="tabLookups" class="tab" style="display:none" onclick="showTab('lookups')">Cadastros</button>
+		<button id="tabUsers" class="tab" style="display:none" onclick="showTab('users')">Usuários</button>
+	</div>
+
+	<div id="panelTable" style="display:block">
+		<div class="table-wrap">
+			<table class="table" id="tbl"><thead><tr>
+				<th class="freeze-left" data-label="Membro" onclick="openFilterModal('Membro')">Membro</th>
+				<th data-label="Sexo" onclick="openFilterModal('Sexo')">Sexo</th>
+				<th data-label="Concurso" onclick="openFilterModal('Concurso')">Concurso</th>
+				<th data-label="Cargo efetivo" onclick="openFilterModal('Cargo efetivo')">Cargo efetivo</th>
+				<th data-label="Titularidade" onclick="openFilterModal('Titularidade')">Titularidade</th>
+				<th data-label="eMail pessoal" onclick="openFilterModal('eMail pessoal')">eMail pessoal</th>
+				<th data-label="Telefone Unidade" onclick="openFilterModal('Telefone Unidade')">Telefone Unidade</th>
+				<th data-label="Telefone celular" onclick="openFilterModal('Telefone celular')">Telefone celular</th>
+				<th data-label="Unidade Lotação" onclick="openFilterModal('Unidade Lotação')">Unidade Lotação</th>
+				<th data-label="Comarca Lotação" onclick="openFilterModal('Comarca Lotação')">Comarca Lotação</th>
+				<th data-label="Time de futebol e outros grupos extraprofissionais" onclick="openFilterModal('Time de futebol e outros grupos extraprofissionais')">Time/Grupos extraprofissionais</th>
+				<th data-label="Quantidade de filhos" onclick="openFilterModal('Quantidade de filhos')">Qtd. filhos</th>
+				<th data-label="Nome dos filhos" onclick="openFilterModal('Nome dos filhos')">Nome dos filhos</th>
+				<th data-label="Estado de origem" onclick="openFilterModal('Estado de origem')">Estado de origem</th>
+				<th data-label="Acadêmico" onclick="openFilterModal('Acadêmico')">Acadêmico</th>
+				<th data-label="Pretensão de movimentação na carreira" onclick="openFilterModal('Pretensão de movimentação na carreira')">Pretensão de movimentação</th>
+				<th data-label="Carreira anterior" onclick="openFilterModal('Carreira anterior')">Carreira anterior</th>
+				<th data-label="Liderança" onclick="openFilterModal('Liderança')">Liderança</th>
+				<th data-label="Grupos identitários" onclick="openFilterModal('Grupos identitários')">Grupos identitários</th>
+				<th class="freeze-right">Ações <button class="icon-btn" onclick="clearAllFilters()" title="Limpar filtros">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<circle cx="12" cy="12" r="9"></circle>
+						<line x1="5" y1="19" x2="19" y2="5"></line>
+					</svg>
+				</button></th>
+			</tr></thead><tbody></tbody></table>
+		</div>
+		<div id="pager" class="pager"></div>
+	</div>
+
+	<div id="panelCharts" style="display:none">
+		<div class="grid">
+			<div class="card"><div class="card-body"><div style="display:flex;justify-content:space-between"><strong>Top 20 por Comarca</strong><button class="btn" onclick="loadChartComarca()">Atualizar</button></div><div id="chartComarca" style="width:100%;height:320px"></div></div></div>
+			<div class="card"><div class="card-body"><div style="display:flex;justify-content:space-between"><strong>Top 10 por Cargo efetivo</strong><button class="btn" onclick="loadChartCargo()">Atualizar</button></div><div id="chartCargo" style="width:100%;height:320px"></div></div></div>
+			<div class="card"><div class="card-body"><div style="display:flex;justify-content:space-between"><strong>Mapa por Comarca (MG)</strong><button class="btn" onclick="loadMap()">Atualizar</button></div><div id="chartMap" style="width:100%;height:420px"></div><div id="mapMsg" style="opacity:.8;font-size:12px"></div></div></div>
+			<div class="card"><div class="card-body"><div style="display:flex;justify-content:space-between"><strong>Relacionamentos (Amigos no MP)</strong><button class="btn" onclick="loadGraph()">Atualizar</button></div><div id="chartGraph" style="width:100%;height:420px"></div><div id="graphMsg" style="opacity:.8;font-size:12px"></div></div></div>
+		</div>
+	</div>
+
+	<div id="panelLookups" style="display:none">
+		<div class="toolbar" style="margin-top:0">
+			<select id="lkType" onchange="lkLoadList()" style="max-width:320px">
+				<option value="concurso">Concurso</option>
+				<option value="cargo_efetivo">Cargo efetivo</option>
+				<option value="titularidade">Titularidade</option>
+				<option value="cargo_especial">Cargo especial</option>
+				<option value="unidade_lotacao">Unidade de lotação</option>
+				<option value="comarca_lotacao">Comarca de lotação</option>
+				<option value="time_extraprofissionais">Time de futebol e outros grupos extraprofissionais</option>
+				<option value="estado_origem">Estado de origem</option>
+				<option value="grupos_identitarios">Grupos identitários</option>
+			</select>
+			<input id="lkQ" class="input" placeholder="Buscar..." oninput="lkLoadList()" />
+		</div>
+		<div class="row">
+			<input id="lkNew" class="input" placeholder="Novo valor" />
+			<button class="btn" onclick="lkCreate()">Adicionar</button>
+		</div>
+		<table class="table"><thead><tr><th>Valor</th><th style="width:140px">Ações</th></tr></thead><tbody id="lkBody"></tbody></table>
+	</div>
+
+	<div id="panelUsers" style="display:none">
+		<div class="toolbar" style="margin-top:0">
+			<input id="uQ" class="input" placeholder="Buscar por nome ou email..." oninput="usersLoad()" />
+		</div>
+		<div class="row" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap:8px">
+			<input id="uName" class="input" placeholder="Nome" />
+			<input id="uEmail" class="input" placeholder="Email" />
+			<select id="uRole" class="input"><option value="user">Comum</option><option value="admin">Admin</option></select>
+			<input id="uPhone" class="input" placeholder="Telefone (DDD + número)" />
+			<input id="uPass" class="input" placeholder="Senha" type="password" />
+			<input id="uConfirm" class="input" placeholder="Confirmar senha" type="password" />
+			<label style="display:flex; gap:8px; align-items:center"><input type="checkbox" id="u2fa" /> 2FA habilitado</label>
+			<label style="display:flex; gap:8px; align-items:center"><input type="checkbox" id="uActive" checked /> Ativo</label>
+			<button class="btn" onclick="usersCreate()">Criar usuário</button>
+		</div>
+		<table class="table" style="margin-top:12px"><thead><tr><th>Nome</th><th>Email</th><th>Permissão</th><th>Telefone</th><th>2FA</th><th>Status</th><th style="width:200px">Ações</th></tr></thead><tbody id="uBody"></tbody></table>
+	</div>
+
+	<div class="modal" id="modal">
+		<div class="modal-inner">
+			<div style="display:flex; justify-content:space-between; align-items:center"><strong id="modalTitle">Detalhes</strong>
+				<div style="display:flex; gap:8px">
+					<button class="btn" onclick="saveModal()" id="btnSave" style="display:none">Salvar</button>
+					<button class="btn" onclick="closeModal()">Fechar</button>
+				</div>
+			</div>
+			<div id="modalBody"></div>
+		</div>
+	</div>
+
+	<div class="modal" id="userPwdModal">
+		<div class="modal-inner">
+			<div style="display:flex; justify-content:space-between; align-items:center"><strong>Trocar senha</strong>
+				<div style="display:flex; gap:8px">
+					<button class="btn" onclick="saveUserPwd()">Salvar</button>
+					<button class="btn" onclick="closeUserPwdModal()">Fechar</button>
+				</div>
+			</div>
+			<div class="row" style="margin-top:8px">
+				<input id="pwdNew" class="input" type="password" placeholder="Nova senha" />
+				<input id="pwdConfirm" class="input" type="password" placeholder="Confirmar nova senha" />
+			</div>
+		</div>
+	</div>
+
+	<div class="modal" id="filterModal">
+		<div class="modal-inner">
+			<div style="display:flex; justify-content:space-between; align-items:center">
+				<strong id="filterTitle">Filtrar</strong>
+				<div style="display:flex; gap:8px">
+					<button class="btn" onclick="applyFilterModal()">Aplicar</button>
+					<button class="btn" onclick="closeFilterModal()">Fechar</button>
+				</div>
+			</div>
+			<div style="display:flex; gap:8px; margin:8px 0">
+				<input id="filterSearch" class="input" placeholder="Buscar valor..." oninput="renderFilterOptions()" />
+				<button class="btn" onclick="clearFilterCurrent()">Limpar filtro desta coluna</button>
+			</div>
+			<div id="filterOptions" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:8px"></div>
+		</div>
+	</div>
+
+	<div class="modal" id="selfPwdModal">
+		<div class="modal-inner">
+			<div style="display:flex; justify-content:space-between; align-items:center"><strong>Trocar minha senha</strong>
+				<div style="display:flex; gap:8px">
+					<button class="btn" onclick="saveSelfPwd()">Salvar</button>
+					<button class="btn" onclick="closeSelfPwd()">Fechar</button>
+				</div>
+			</div>
+			<div class="row" style="margin-top:8px">
+				<input id="selfPwdCurrent" class="input" type="password" placeholder="Senha atual" />
+				<input id="selfPwdNew" class="input" type="password" placeholder="Nova senha" />
+				<input id="selfPwdConfirm" class="input" type="password" placeholder="Confirmar nova senha" />
+			</div>
+		</div>
+	</div>
+
+	<script>
+	function guard(){ if(!localStorage.getItem('token')) location.href='/login' }
+	function token(){ return localStorage.getItem('token') || '' }
+	function auth(){ return token() ? { 'Authorization': 'Bearer '+token() } : {} }
+	function decodeJwtPayload(){ try{ const t=token(); if(!t) return {}; const p=t.split('.')[1]; const pad=(s)=>s.padEnd(s.length+((4-(s.length%4))%4),'='); return JSON.parse(atob(p.replace(/-/g,'+').replace(/_/g,'/')));}catch{return{}} }
+	function isAdmin(){ const p=decodeJwtPayload(); const role=(p.role||((p.sub||{}).role)||'').toLowerCase(); return role==='admin' }
+
+	function toast(msg, type){ const box=document.getElementById('toasts'); const el=document.createElement('div'); el.className='toast'+(type?(' '+type):''); el.textContent=msg; box.appendChild(el); setTimeout(()=>{ el.remove() }, 3500) }
+
+	let currentId = null; let currentData = null; let currentUser = null; let lookupsInited = false;
+	const fields = [
+		'Membro','Sexo','Concurso','Cargo efetivo','Titularidade','eMail pessoal','Cargo Especial','Telefone Unidade','Telefone celular','Unidade Lotação','Comarca Lotação','Time de futebol e outros grupos extraprofissionais','Quantidade de filhos','Nome dos filhos','Estado de origem','Acadêmico','Pretensão de movimentação na carreira','Carreira anterior','Liderança','Grupos identitários'
+	]
+	let perPage = 13, currentPage = 1, totalCount = 0, chartsLoaded = false
+	let columnFilters = {} // { label: [values] }
+	let filterCurrentLabel = null; let filterAllValues = []; let filterSelectedSet = new Set()
+
+	function filtersParam(){ try{ return encodeURIComponent(JSON.stringify(columnFilters||{})) }catch{ return '' } }
+
+	function renderHeaderFilters(){
+		const ths = document.querySelectorAll('#tbl thead th[data-label]')
+		ths.forEach(th=>{
+			const label = th.getAttribute('data-label')
+			const active = !!(columnFilters[label] && columnFilters[label].length)
+			th.innerHTML = `${label}${active ? ' <span class=\"filter-badge\">filtrado</span>' : ''}`
+		})
+	}
+
+	function toggleProfile(){ const m=document.getElementById('profileMenu'); m.style.display = (m.style.display==='block'?'none':'block') }
+	document.addEventListener('click', (e)=>{ const p=document.getElementById('profile'); if(!p.contains(e.target)) document.getElementById('profileMenu').style.display='none' })
+	function renderProfile(){ const n=(currentUser?.name||'').trim(); const em=(currentUser?.email||'').trim(); const ini=(n?n[0]: (em?em[0]:'?')).toUpperCase(); document.getElementById('avatar').textContent=ini; document.getElementById('profileName').textContent=n||em||'Usuário'; document.getElementById('menuName').textContent=n||'Usuário'; document.getElementById('menuEmail').textContent=em||''; const tabL=document.getElementById('tabLookups'); tabL.style.display = isAdmin() ? 'inline-block' : 'none'; const tabU=document.getElementById('tabUsers'); tabU.style.display = isAdmin() ? 'inline-block' : 'none' }
+	async function loadMe(){ try{ const r=await fetch('/api/auth/me', { headers:{ ...auth() } }); const d=await r.json(); currentUser = d?.user||null; renderProfile() }catch{} }
+	function doLogout(){ localStorage.removeItem('token'); location.href='/login' }
+
+	function show(rows){
+		const tbody = document.querySelector('#tbl tbody');
+		tbody.innerHTML = ''
+		for(const r of rows){
+			const tr = document.createElement('tr')
+			tr.innerHTML = `
+				<td class='freeze-left'>${r.data['Membro']||''}</td>
+				<td>${r.data['Sexo']||''}</td>
+				<td>${r.data['Concurso']||''}</td>
+				<td>${r.data['Cargo efetivo']||''}</td>
+				<td>${r.data['Titularidade']||''}</td>
+				<td>${r.data['eMail pessoal']||''}</td>
+				<td>${r.data['Telefone Unidade']||''}</td>
+				<td>${r.data['Telefone celular']||''}</td>
+				<td>${r.data['Unidade Lotação']||''}</td>
+				<td>${r.data['Comarca Lotação']||''}</td>
+				<td>${r.data['Time de futebol e outros grupos extraprofissionais']||''}</td>
+				<td>${r.data['Quantidade de filhos']??''}</td>
+				<td>${r.data['Nome dos filhos']||''}</td>
+				<td>${r.data['Estado de origem']||''}</td>
+				<td>${r.data['Acadêmico']||''}</td>
+				<td>${r.data['Pretensão de movimentação na carreira']||''}</td>
+				<td>${r.data['Carreira anterior']||''}</td>
+				<td>${r.data['Liderança']||''}</td>
+				<td>${r.data['Grupos identitários']||''}</td>
+				<td class='freeze-right'><button class='btn' onclick='openModal(${r.id})'>Ver</button></td>
+			`
+			tbody.appendChild(tr)
+		}
+	}
+	async function search(page=1){
+		guard(); currentPage = page
+		const q = document.getElementById('q').value
+		const r = await fetch(`/api/membros?page=${page}&per_page=${perPage}&q=${encodeURIComponent(q)}&filters_json=${filtersParam()}`, { headers: { 'Content-Type':'application/json', ...auth() } })
+		if(r.status===401||r.status===422){ localStorage.removeItem('token'); location.href='/login'; return }
+		const data = await r.json()
+		show(data.data || [])
+		totalCount = Number(data.total||0)
+		renderPager(); renderHeaderFilters()
+	}
+	function renderPager(){
+		const el = document.getElementById('pager')
+		const totalPages = Math.max(1, Math.ceil(totalCount / perPage))
+		const canPrev = currentPage > 1
+		const canNext = currentPage < totalPages
+		el.innerHTML = `
+			<div style='margin-right:auto'>Total: ${totalCount} registros ${Object.keys(columnFilters).length? '(com filtros)':''}</div>
+			<button class='btn' ${canPrev?'':'disabled'} onclick='gotoPage(${currentPage-1})'>Anterior</button>
+			<span>Página ${currentPage} de ${totalPages}</span>
+			<button class='btn' ${canNext?'':'disabled'} onclick='gotoPage(${currentPage+1})'>Próxima</button>
+		`
+	}
+	function gotoPage(p){ if(p<1) return; search(p) }
+
+	async function openModal(id){
+		guard(); currentId = id; currentData = null
+		document.getElementById('modalTitle').textContent = `Detalhes #${id}`
+		document.getElementById('modalBody').innerHTML = 'Carregando...'
+		document.getElementById('btnSave').style.display = isAdmin() ? 'inline-block' : 'none'
+		document.getElementById('modal').style.display='flex'
+		try{
+			const r = await fetch(`/api/membros/${id}`, { headers: { 'Content-Type':'application/json', ...auth() } })
+			if(r.status===401){ localStorage.removeItem('token'); location.href='/login'; return }
+			if(!r.ok){ document.getElementById('modalBody').textContent = 'Falha ao carregar detalhes'; return }
+			const row = await r.json(); currentData = (row && (row.data||row)) || {}
+		}catch(e){ document.getElementById('modalBody').textContent = 'Erro ao carregar detalhes'; return }
+		renderModal()
+	}
+	let amigoIds = new Set(); let amigoNames = []
+	async function loadAmigosInitial(){
+		const ids = currentData['Amigos no MP (IDs)']||[]; const nomes = currentData['Amigos no MP (Nomes)']||[]
+		amigoIds = new Set(Array.isArray(ids)? ids.map(n=>Number(n)).filter(n=>Number.isFinite(n)) : [])
+		amigoNames = Array.isArray(nomes)? nomes : []
+	}
+	function renderAmigosUI(container){
+		container.innerHTML = ''
+		const chips = document.createElement('div'); chips.className='chips'
+		let i=0; for(const name of amigoNames){ const id = Array.from(amigoIds)[i++]||null; const chip=document.createElement('span'); chip.className='chip'; chip.innerHTML=`<span>${name}</span><button title='Remover' onclick='removeAmigo(${id})'>×</button>`; chips.appendChild(chip) }
+		container.appendChild(chips)
+		const box = document.createElement('div'); box.innerHTML = `<input id='amigoSearch' class='input' placeholder='Buscar membro para adicionar...' oninput='debouncedAmigoSuggest()' /> <div id='amigoSuggest' class='suggest' style='display:none'></div>`
+		container.appendChild(box)
+	}
+	let amigoTimer=null
+	function debouncedAmigoSuggest(){ clearTimeout(amigoTimer); amigoTimer=setTimeout(amigoSuggest, 200) }
+	async function amigoSuggest(){
+		const el=document.getElementById('amigoSearch'); if(!el) return; const q=el.value.trim(); const box=document.getElementById('amigoSuggest');
+		if(!q){ box.style.display='none'; box.innerHTML=''; return }
+		const r=await fetch(`/api/membros/search-min?q=${encodeURIComponent(q)}`, { headers:{ ...auth() } }); if(!r.ok){ box.style.display='none'; return }
+		const d=await r.json(); const items=d.data||[]; if(!items.length){ box.style.display='none'; box.innerHTML=''; return }
+		box.innerHTML = items.map(it=>`<div onclick='addAmigo(${it.id}, ${JSON.stringify(it.nome).replace(/"/g,'&quot;')})'>${it.nome}</div>`).join('')
+		box.style.display='block'
+	}
+	function addAmigo(id, nome){ id=Number(id); if(!Number.isFinite(id) || amigoIds.has(id)) return; amigoIds.add(id); amigoNames.push(String(nome||('#'+id))); const cont=document.getElementById('amigosBox'); renderAmigosUI(cont); document.getElementById('amigoSuggest').style.display='none'; document.getElementById('amigoSuggest').innerHTML=''; document.getElementById('amigoSearch').value=''; }
+	function removeAmigo(id){ const arrIds=Array.from(amigoIds); const idx=arrIds.indexOf(Number(id)); if(idx>=0){ arrIds.splice(idx,1); amigoIds=new Set(arrIds); amigoNames.splice(idx,1); const cont=document.getElementById('amigosBox'); renderAmigosUI(cont) } }
+
+	function renderModal(){
+		const admin = isAdmin();
+		let html = `<div class='form-grid'>`
+		for(const k of fields){
+			const v = currentData[k] ?? ''
+			html += `<div class='row'><label class='label'>${k}</label>`
+			if(admin){
+				if(k==='Sexo') html += `<select class='input' data-key='${k}'><option value=''></option><option ${v==='Masculino'?'selected':''}>Masculino</option><option ${v==='Feminino'?'selected':''}>Feminino</option></select>`
+				else if(k==='Estado de origem'){
+					const ufs=['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
+					html += `<select class='input' data-key='${k}'><option value=''></option>${ufs.map(uf=>`<option ${v===uf?'selected':''}>${uf}</option>`).join('')}</select>`
+				} else if(k==='Quantidade de filhos') html += `<input class='input' data-key='${k}' type='number' min='0' value='${v||''}' />`
+				else html += `<input class='input' data-key='${k}' value='${String(v).replace(/\"/g,'&quot;')}' />`
+			} else {
+				html += `<div>${v||'-'}</div>`
+			}
+			html += `</div>`
+		}
+		// Se admin, bloco para amigos no MP
+		if(admin){
+			html += `<div class='row'><label class='label'>Amigos no MP</label><div id='amigosBox'></div></div>`
+		}
+		html += `</div>`
+		document.getElementById('modalBody').innerHTML = html
+		if(admin){ loadAmigosInitial(); renderAmigosUI(document.getElementById('amigosBox')) }
+	}
+	async function saveModal(){
+		const inputs = document.querySelectorAll('#modalBody [data-key]')
+		const payload = { }
+		for(const el of inputs){ payload[el.getAttribute('data-key')] = el.value }
+		// incluir amigos IDs
+		payload['Amigos no MP (IDs)'] = Array.from(amigoIds)
+		const r = await fetch(`/api/membros/${currentId}`, { method:'PUT', headers: { 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ data: payload }) })
+		if(!r.ok){ toast('Falha ao salvar', 'error'); return }
+		toast('Salvo com sucesso', 'success'); closeModal(); search(currentPage)
+	}
+	function closeModal(){ document.getElementById('modal').style.display='none' }
+
+	function showTab(which){
+		const tBtn = document.getElementById('tabTable'), cBtn = document.getElementById('tabCharts'), lBtn=document.getElementById('tabLookups'), uBtn=document.getElementById('tabUsers')
+		const tPanel = document.getElementById('panelTable'), cPanel = document.getElementById('panelCharts'), lPanel=document.getElementById('panelLookups'), uPanel=document.getElementById('panelUsers')
+		if(which==='charts'){
+			tBtn.classList.remove('active'); cBtn.classList.add('active'); lBtn.classList.remove('active'); uBtn.classList.remove('active'); tPanel.style.display='none'; cPanel.style.display='block'; lPanel.style.display='none'; uPanel.style.display='none'; loadChartsIfNeeded()
+		}else if(which==='lookups'){
+			tBtn.classList.remove('active'); cBtn.classList.remove('active'); lBtn.classList.add('active'); uBtn.classList.remove('active'); tPanel.style.display='none'; cPanel.style.display='none'; lPanel.style.display='block'; uPanel.style.display='none'; if(!lookupsInited){ lkInit(); lookupsInited=true }
+		}else if(which==='users'){
+			tBtn.classList.remove('active'); cBtn.classList.remove('active'); lBtn.classList.remove('active'); uBtn.classList.add('active'); tPanel.style.display='none'; cPanel.style.display='none'; lPanel.style.display='none'; uPanel.style.display='block'; usersLoad()
+		}else{
+			tBtn.classList.add('active'); cBtn.classList.remove('active'); lBtn.classList.remove('active'); uBtn.classList.remove('active'); tPanel.style.display='block'; cPanel.style.display='none'; lPanel.style.display='none'; uPanel.style.display='none';
+		}
+	}
+	function loadChartsIfNeeded(){ if(chartsLoaded) return; loadChartComarca(); loadChartCargo(); loadMap(); loadGraph(); chartsLoaded=true }
+
+	// Autocomplete + busca em tempo real
+	let suggestTimer = null, searchTimer = null
+	function onMainInput(){ debouncedSuggest(); debouncedSearch() }
+	function debouncedSuggest(){ clearTimeout(suggestTimer); suggestTimer = setTimeout(suggest, 200) }
+	function debouncedSearch(){ clearTimeout(searchTimer); searchTimer = setTimeout(()=>search(1), 200) }
+	async function suggest(){
+		const q = document.getElementById('q').value.trim(); if(!q) { document.getElementById('suggestions').innerHTML=''; return }
+		const r = await fetch(`/api/membros/suggest?q=${encodeURIComponent(q)}`, { headers: { ...auth() } })
+		if(!r.ok) return; const data = await r.json(); const list = document.getElementById('suggestions');
+		list.innerHTML = (data.values||[]).map(v=>`<option value=\"${String(v).replace(/\"/g,'&quot;')}\"></option>`).join('')
+	}
+
+	// Filtro por coluna (modal) com aplicação em tempo real
+	async function openFilterModal(label){
+		filterCurrentLabel = label; filterSelectedSet = new Set(columnFilters[label]||[])
+		document.getElementById('filterTitle').textContent = `Filtrar: ${label}`
+		document.getElementById('filterSearch').value=''
+		const r = await fetch(`/api/membros/distinct?field=${encodeURIComponent(label)}&limit=500&filters_json=${filtersParam()}`, { headers: { ...auth() } })
+		const data = await r.json(); filterAllValues = data.values||[]
+		renderFilterOptions()
+		document.getElementById('filterModal').style.display='flex'
+	}
+	function renderFilterOptions(){
+		const q = document.getElementById('filterSearch').value.trim().toLowerCase()
+		const box = document.getElementById('filterOptions'); box.innerHTML=''
+		const vals = filterAllValues.filter(v=> String(v||'').toLowerCase().includes(q))
+		for(const v of vals){
+			const id = `opt_${filterCurrentLabel}_${btoa(unescape(encodeURIComponent(String(v))))}`
+			const div = document.createElement('div')
+			div.innerHTML = `<label style='display:flex; gap:8px; align-items:center'><input type='checkbox' id='${id}' ${filterSelectedSet.has(String(v))?'checked':''} onchange='toggleFilterValue(\"${String(v).replace(/\"/g,'&quot;')}\")' /> <span>${String(v)||'(vazio)'}</span></label>`
+			box.appendChild(div)
+		}
+	}
+	function toggleFilterValue(val){
+		val=String(val); if(filterSelectedSet.has(val)) filterSelectedSet.delete(val); else filterSelectedSet.add(val)
+		const arr = Array.from(filterSelectedSet)
+		if(arr.length) columnFilters[filterCurrentLabel]=arr; else delete columnFilters[filterCurrentLabel]
+		renderHeaderFilters(); debouncedSearch()
+	}
+	function applyFilterModal(){ closeFilterModal() }
+	function clearFilterCurrent(){ delete columnFilters[filterCurrentLabel]; filterSelectedSet = new Set(); renderFilterOptions(); renderHeaderFilters(); debouncedSearch() }
+	function closeFilterModal(){ document.getElementById('filterModal').style.display='none' }
+	function clearAllFilters(){ columnFilters = {}; renderHeaderFilters(); debouncedSearch() }
+
+	async function loadChartComarca(){
+		guard()
+		const q = document.getElementById('q').value
+		const r = await fetch(`/api/membros/aggregate?field=${encodeURIComponent('Comarca Lotação')}&limit=20&q=${encodeURIComponent(q)}&filters_json=${filtersParam()}`, { headers: { ...auth() } })
+		const data = await r.json()
+		const el = document.getElementById('chartComarca')
+		const chart = echarts.init(el)
+		const labels = (data.data||[]).map(x=>x.v)
+		const values = (data.data||[]).map(x=>x.c)
+		chart.setOption({ tooltip:{}, grid:{ left:8,right:8,top:24,bottom:8,containLabel:true }, xAxis:{ type:'value' }, yAxis:{ type:'category', data:labels, axisLabel:{ interval:0 } }, series:[{ type:'bar', data:values, itemStyle:{ color:'#2563eb' } }] })
+	}
+	async function loadChartCargo(){
+		guard()
+		const q = document.getElementById('q').value
+		const r = await fetch(`/api/membros/aggregate?field=${encodeURIComponent('Cargo efetivo')}&limit=10&q=${encodeURIComponent(q)}&filters_json=${filtersParam()}`, { headers: { ...auth() } })
+		const data = await r.json()
+		const el = document.getElementById('chartCargo')
+		const chart = echarts.init(el)
+		const labels = (data.data||[]).map(x=>x.v)
+		const values = (data.data||[]).map(x=>x.c)
+		chart.setOption({ tooltip:{}, grid:{ left:8,right:8,top:24,bottom:8,containLabel:true }, xAxis:{ type:'category', data:labels, axisLabel:{ interval:0, rotate:20 } }, yAxis:{ type:'value' }, series:[{ type:'bar', data:values, itemStyle:{ color:'#16a34a' } }] })
+	}
+
+	let mgGeoLoaded=false, mgGeoFeatures=[]
+	async function ensureMG(){ if(mgGeoLoaded) return; try{ const resp=await fetch('https://servicodados.ibge.gov.br/api/v3/malhas/municipios/31?formato=application/vnd.geo+json'); if(resp.ok){ const geo=await resp.json(); if(geo&&Array.isArray(geo.features)&&geo.features.length){ echarts.registerMap('mg_municipios', geo); mgGeoLoaded=true; mgGeoFeatures=geo.features; } } } catch(e) { mgGeoLoaded=false }
+	}
+	async function loadMap(){
+		await ensureMG()
+		const el = document.getElementById('chartMap')
+		const chart = echarts.init(el)
+		const q = document.getElementById('q').value
+		const r = await fetch(`/api/membros/aggregate?field=${encodeURIComponent('Comarca Lotação')}&limit=9999&q=${encodeURIComponent(q)}&filters_json=${filtersParam()}`, { headers: { ...auth() } })
+		const data = await r.json()
+		const entries = {}; for(const it of (data.data||[])) entries[String(it.v||'').toUpperCase()] = it.c
+		const seriesData = []
+		for(const f of (mgGeoFeatures||[])){
+			const name = (f.properties?.name||'').toUpperCase(); const label=f.properties?.name
+			seriesData.push({ name: label, value: entries[name]||0 })
+		}
+		chart.setOption({ tooltip:{ trigger:'item', formatter:(p)=>`${p.name}: ${p.value??0}` }, visualMap:{ min:0, max: Math.max(1,...seriesData.map(d=>d.value||0)), left:'left', top:'bottom', text:['Alto','Baixo'], calculable:true }, series:[{ type:'map', map:'mg_municipios', roam:true, data:seriesData }] })
+		document.getElementById('mapMsg').textContent = mgGeoLoaded? '' : 'Não foi possível carregar o mapa do IBGE agora.'
+	}
+
+	async function loadGraph(){
+		const el = document.getElementById('chartGraph')
+		const chart = echarts.init(el)
+		let page=1; const per=500; const maxPages=20; const all=[]
+		try{
+			while(page<=maxPages){
+				const r = await fetch(`/api/membros?page=${page}&per_page=${per}&filters_json=${filtersParam()}`, { headers: { ...auth() } })
+				if(!r.ok) break; const data=await r.json(); const rows=data.data||[]; all.push(...rows); if(rows.length<per) break; page++
+			}
+		}catch{}
+		if(!all.length){ chart.setOption({ series:[{ type:'graph', data:[], links:[] }] }); document.getElementById('graphMsg').textContent='Sem dados.'; return }
+		const idToName={}, nameToId={}
+		for(const r of all){ const nm=String(r.data['Membro']||r.data['Nome']||('#'+r.id)); idToName[r.id]=nm; const key=nm.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase(); if(key&&!nameToId[key]) nameToId[key]=r.id }
+		const edgeSet=new Set(); const degree={}; const idSet=new Set(all.map(r=>r.id))
+		for(const r of all){ const raw=r.data['Amigos no MP (IDs)']; let friendIds=[]; if(Array.isArray(raw)) friendIds=raw.map(x=>Number(x)).filter(n=>Number.isFinite(n)); else if(typeof raw==='string'){ const ids=raw.split(/[^0-9]+/).map(s=>Number(s)).filter(n=>Number.isFinite(n)); if(ids.length) friendIds=ids }
+			for(const fid of friendIds){ if(!idSet.has(fid)) continue; const a=Math.min(r.id,fid), b=Math.max(r.id,fid); const key=`${a}-${b}`; if(!edgeSet.has(key)&&a!==b){ edgeSet.add(key); degree[a]=(degree[a]||0)+1; degree[b]=(degree[b]||0)+1 } }
+		}
+		let nodesAll = Array.from(new Set(Array.from(edgeSet).flatMap(k=>k.split('-').map(s=>Number(s))))).map(id=>({ id:String(id), name:idToName[id]||('#'+id), value: degree[id]||1 }))
+		if(!nodesAll.length){ chart.setOption({ series:[{ type:'graph', data:[], links:[] }] }); document.getElementById('graphMsg').textContent='Sem relacionamentos.'; return }
+		const links = Array.from(edgeSet).map(k=>{ const [a,b]=k.split('-').map(s=>String(s)); return { source:a, target:b } })
+		const nodes = nodesAll.map(n=>({ ...n, symbolSize: Math.max(8, 8+(n.value||0)*2) }))
+		chart.setOption({ tooltip:{ formatter:(p)=>p.data?.name||'' }, series:[{ type:'graph', layout:'force', roam:true, label:{ show:true, position:'right', formatter:'{b}', fontSize:10 }, data:nodes, links, force:{ repulsion:120, edgeLength:[30,120] }, lineStyle:{ color:'#94a3b8' }, itemStyle:{ color:'#2563eb' } }] })
+		document.getElementById('graphMsg').textContent=''
+	}
+
+	// Lookups CRUD (aba Cadastros)
+	async function lkPopulate(){ try{ await fetch('/api/lookups/populate-from-membros', { method:'POST', headers:{ ...auth() } }) }catch(e){} }
+	async function lkLoadList(page=1){ const type=document.getElementById('lkType').value; const q=document.getElementById('lkQ').value.trim(); const r=await fetch(`/api/lookups?type=${encodeURIComponent(type)}&q=${encodeURIComponent(q)}&page=${page}&per_page=200`, { headers:{ ...auth() } }); const d=await r.json(); const tb=document.getElementById('lkBody'); tb.innerHTML=''; for(const it of (d.data||[])){ const tr=document.createElement('tr'); tr.innerHTML=`<td><input class='input' value=\"${String(it.value).replace(/\"/g,'&quot;')}\" data-id='${it.id}' style='width:100%'/></td><td><button class='btn' onclick='lkSave(${it.id})'>Salvar</button> <button class='btn' onclick='lkDelete(${it.id})'>Excluir</button></td>`; tb.appendChild(tr) } }
+	async function lkCreate(){ const type=document.getElementById('lkType').value; const value=document.getElementById('lkNew').value.trim(); if(!value){ toast('Informe um valor', 'error'); return } const r=await fetch('/api/lookups', { method:'POST', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ type, value }) }); if(r.ok){ document.getElementById('lkNew').value=''; toast('Adicionado', 'success'); lkLoadList() } else { toast('Falha ao adicionar', 'error') } }
+	async function lkSave(id){ const inp = document.querySelector(`[data-id="${id}"]`); const value=inp.value.trim(); const r=await fetch(`/api/lookups/${id}`, { method:'PUT', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ value }) }); if(r.ok){ toast('Salvo', 'success'); lkLoadList() } else { toast('Falha ao salvar', 'error') } }
+	async function lkDelete(id){ if(!confirm('Excluir este valor?')) return; const r=await fetch(`/api/lookups/${id}`, { method:'DELETE', headers:{ ...auth() } }); if(r.ok){ toast('Excluído', 'success'); lkLoadList() } else { toast('Falha ao excluir', 'error') } }
+	async function lkInit(){ await lkPopulate(); lkLoadList() }
+
+	async function usersLoad(){ const q=document.getElementById('uQ').value.trim(); const r=await fetch(`/api/users?q=${encodeURIComponent(q)}`, { headers:{ ...auth() } }); const d=await r.json(); const tb=document.getElementById('uBody'); tb.innerHTML=''; for(const it of (d.data||[])){ const tr=document.createElement('tr'); tr.innerHTML=`<td><input class='input' value="${String(it.name).replace(/\"/g,'&quot;')}" data-k='name' data-id='${it.id}' /></td><td><input class='input' value="${String(it.email).replace(/\"/g,'&quot;')}" data-k='email' data-id='${it.id}' /></td><td><select class='input' data-k='role' data-id='${it.id}'><option value='user' ${it.role==='user'?'selected':''}>Comum</option><option value='admin' ${it.role==='admin'?'selected':''}>Admin</option></select></td><td><input class='input' value="${String(it.phone||'').replace(/\"/g,'&quot;')}" data-k='phone' data-id='${it.id}' /></td><td><input type='checkbox' ${it.two_factor_enabled?'checked':''} data-k='two_factor_enabled' data-id='${it.id}' /></td><td><span>${it.active?'Ativo':'Inativo'}</span></td><td class='actions'><div class='btn-col'><button class='btn' onclick='userSave(${it.id})'>Salvar</button><button class='btn' onclick='userToggle(${it.id})'>Ativar/Inativar</button><button class='btn' onclick='userPwd(${it.id})'>Trocar senha</button><button class='btn' onclick='userDelete(${it.id})'>Excluir</button></div></td>`; tb.appendChild(tr) } }
+	async function userSave(id){ const sel=(k)=>{ const el=document.querySelector(`[data-k=\"${k}\"][data-id=\"${id}\"]`); if(!el) return null; if(el.type==='checkbox') return el.checked; if(el.tagName==='SELECT') return el.value; return el.value }; const body={ name: sel('name'), email: sel('email'), role: sel('role'), phone: sel('phone'), two_factor_enabled: sel('two_factor_enabled') }; const r=await fetch(`/api/users/${id}`, { method:'PUT', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify(body) }); if(r.ok){ toast('Usuário salvo','success'); usersLoad() } else { toast('Falha ao salvar','error') } }
+	async function userToggle(id){ const r=await fetch(`/api/users/${id}/toggle-active`, { method:'POST', headers:{ ...auth() } }); if(r.ok){ toast('Status alterado','success'); usersLoad() } else { toast('Falha ao alterar status','error') } }
+	let pwdUserId=null;
+	function userPwd(id){ pwdUserId=id; document.getElementById('pwdNew').value=''; document.getElementById('pwdConfirm').value=''; document.getElementById('userPwdModal').style.display='flex' }
+	function closeUserPwdModal(){ document.getElementById('userPwdModal').style.display='none' }
+	async function saveUserPwd(){ if(!pwdUserId){ closeUserPwdModal(); return } const password=document.getElementById('pwdNew').value; const confirm=document.getElementById('pwdConfirm').value; if(!password){ toast('Informe a nova senha','error'); return } if(password!==confirm){ toast('Confirmação não confere','error'); return } const r=await fetch(`/api/users/${pwdUserId}`, { method:'PUT', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ password, confirm }) }); if(r.ok){ toast('Senha alterada','success'); closeUserPwdModal() } else { let msg='Falha ao alterar senha'; try{ const d=await r.json(); if(d?.message) msg=d.message }catch{} toast(msg,'error') } }
+	async function userDelete(id){ if(!confirm('Excluir este usuário?')) return; const r=await fetch(`/api/users/${id}`, { method:'DELETE', headers:{ ...auth() } }); if(r.ok){ toast('Usuário excluído','success'); usersLoad() } else { toast('Falha ao excluir','error') } }
+	async function usersCreate(){ const name=document.getElementById('uName').value.trim(); const email=document.getElementById('uEmail').value.trim(); const role=document.getElementById('uRole').value; const phone=document.getElementById('uPhone').value.trim(); const password=document.getElementById('uPass').value; const confirm=document.getElementById('uConfirm').value; const two_factor_enabled=document.getElementById('u2fa').checked; const active=document.getElementById('uActive').checked; const r=await fetch('/api/users', { method:'POST', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ name,email,role,phone,password,confirm,two_factor_enabled,active }) }); if(r.ok){ toast('Usuário criado','success'); document.getElementById('uName').value=''; document.getElementById('uEmail').value=''; document.getElementById('uPhone').value=''; document.getElementById('uPass').value=''; document.getElementById('uConfirm').value=''; document.getElementById('u2fa').checked=false; document.getElementById('uActive').checked=true; usersLoad() } else { let msg='Falha ao criar usuário'; try{ const d=await r.json(); if(d?.message) msg=d.message }catch{} toast(msg,'error') } }
+
+	function openSelfPwd(){ document.getElementById('selfPwdCurrent').value=''; document.getElementById('selfPwdNew').value=''; document.getElementById('selfPwdConfirm').value=''; document.getElementById('selfPwdModal').style.display='flex' }
+	function closeSelfPwd(){ document.getElementById('selfPwdModal').style.display='none' }
+	async function saveSelfPwd(){ const current_password=document.getElementById('selfPwdCurrent').value; const new_password=document.getElementById('selfPwdNew').value; const confirm=document.getElementById('selfPwdConfirm').value; if(!current_password||!new_password){ toast('Informe as senhas','error'); return } if(new_password!==confirm){ toast('Confirmação não confere','error'); return } const r=await fetch('/api/auth/change-password', { method:'POST', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ current_password, new_password, confirm }) }); if(r.ok){ toast('Senha alterada','success'); closeSelfPwd() } else { let msg='Falha ao alterar senha'; try{ const d=await r.json(); if(d?.message) msg=d.message }catch{} toast(msg,'error') } }
+
+	renderHeaderFilters(); showTab('table'); loadMe(); search(1)
+	</script>
+</body>
+</html> 
