@@ -55,6 +55,8 @@ class Membro(db.Model):
 	grupos_identitarios = db.Column(db.Text)
 	# nova: data de inclusão no MP/carreira (para início da timeline)
 	data_inclusao = db.Column(db.Date)
+	# nova: observação livre
+	observacao = db.Column(db.Text)
 
 	amigos = db.relationship(
 		'Membro',

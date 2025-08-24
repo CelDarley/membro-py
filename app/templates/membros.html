@@ -132,6 +132,7 @@
 				<th data-label="Carreira anterior" onclick="openFilterModal('Carreira anterior')">Carreira anterior</th>
 				<th data-label="Liderança" onclick="openFilterModal('Liderança')">Liderança</th>
 				<th data-label="Grupos identitários" onclick="openFilterModal('Grupos identitários')">Grupos identitários</th>
+				<th data-label="Observação" onclick="openFilterModal('Observação')">Observação</th>
 				<th class="freeze-right">Ações <button class="icon-btn" onclick="clearAllFilters()" title="Limpar filtros">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<circle cx="12" cy="12" r="9"></circle>
@@ -308,7 +309,7 @@
 	async function loadLookup(type){ if(lookupCache[type]) return lookupCache[type]; const r=await fetch(`/api/lookups?type=${encodeURIComponent(type)}&page=1&per_page=500`, { headers:{ ...auth() } }); const d=await r.json(); const vals=(d.data||[]).map(it=>String(it.value)); lookupCache[type]=vals; return vals }
 	async function ensureLookupsLoaded(){ const types = Array.from(new Set(Object.values(lookupFieldMap))); await Promise.all(types.map(t=>loadLookup(t))) }
 	const fields = [
-		'Membro','Sexo','Concurso','Data de inclusão','Cargo efetivo','Titularidade','eMail pessoal','Cargo Especial','Telefone Unidade','Telefone celular','Unidade Lotação','Comarca Lotação','Time de futebol e outros grupos extraprofissionais','Quantidade de filhos','Nome dos filhos','Estado de origem','Acadêmico','Pretensão de movimentação na carreira','Carreira anterior','Liderança','Grupos identitários'
+		'Membro','Sexo','Concurso','Data de inclusão','Cargo efetivo','Titularidade','eMail pessoal','Cargo Especial','Telefone Unidade','Telefone celular','Unidade Lotação','Comarca Lotação','Time de futebol e outros grupos extraprofissionais','Quantidade de filhos','Nome dos filhos','Estado de origem','Acadêmico','Pretensão de movimentação na carreira','Carreira anterior','Liderança','Grupos identitários','Observação'
 	]
 	let perPage = 13, currentPage = 1, totalCount = 0, chartsLoaded = false
 	let columnFilters = {} // { label: [values] }
@@ -357,6 +358,7 @@
 				<td>${r.data['Carreira anterior']||''}</td>
 				<td>${r.data['Liderança']||''}</td>
 				<td>${r.data['Grupos identitários']||''}</td>
+				<td>${r.data['Observação']||''}</td>
 				<td class='freeze-right'>
 					<button class='btn' onclick='openModal(${r.id})'>Ver</button>
 					<button class='icon-btn' title='Histórico' onclick='openHistory(${r.id})'>

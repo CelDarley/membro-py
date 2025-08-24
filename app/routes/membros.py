@@ -92,6 +92,7 @@ def to_row(m: Membro):
 			'Liderança': m.lideranca,
 			'Grupos identitários': m.grupos_identitarios,
 			'Data de inclusão': (m.data_inclusao.isoformat() if m.data_inclusao else None),
+			'Observação': m.observacao,
 			'Amigos no MP (IDs)': [a.id for a in amigos],
 			'Amigos no MP (Nomes)': [a.nome for a in amigos],
 		}
@@ -224,6 +225,7 @@ def create_membro():
 		lideranca=data.get('Liderança'),
 		grupos_identitarios=data.get('Grupos identitários'),
 		data_inclusao=(datetime.strptime(data.get('Data de inclusão'), '%Y-%m-%d').date() if (data.get('Data de inclusão') or '').strip() else None),
+		observacao=data.get('Observação'),
 	)
 	try:
 		db.session.add(m)
@@ -291,6 +293,7 @@ def update_membro(id: int):
 				m.data_inclusao = datetime.strptime(str(vdi).strip(), '%Y-%m-%d').date()
 			except Exception:
 				pass
+		m.observacao = data.get('Observação') if data.get('Observação') not in (None, '') else m.observacao
 		# sincronizar amigos
 		raw = data.get('Amigos no MP (IDs)')
 		if raw is not None:
