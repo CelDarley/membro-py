@@ -16,10 +16,14 @@ def create_app() -> Flask:
 	from .routes.views import bp as views_bp
 	from .routes.lookups import bp as lookups_bp
 	from .routes.users import bp as users_bp
+	from .routes.relationships import bp as rel_bp
+	from .routes.municipios import bp as municipios_bp
 	app.register_blueprint(auth_bp, url_prefix='/api/auth')
 	app.register_blueprint(membros_bp, url_prefix='/api')
 	app.register_blueprint(lookups_bp, url_prefix='/api')
 	app.register_blueprint(users_bp, url_prefix='/api')
+	app.register_blueprint(rel_bp, url_prefix='/api')
+	app.register_blueprint(municipios_bp, url_prefix='/api')
 	app.register_blueprint(views_bp)
 
 	@app.get('/api/health')

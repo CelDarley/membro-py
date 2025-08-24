@@ -2,10 +2,18 @@ from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from sqlalchemy import func
 from ..db import db
-from ..models import Membro, MembroHistorico
+from ..models import Membro, MembroHistorico, MembroRelacionamento
 import json
 import re
 from datetime import datetime
+from io import BytesIO
+from flask import send_file
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.lib import colors
 
 bp = Blueprint('membros', __name__)
 
@@ -395,4 +403,124 @@ def delete_historico(hist_id: int):
 	h = MembroHistorico.query.get_or_404(hist_id)
 	db.session.delete(h)
 	db.session.commit()
-	return { 'success': True } 
+	return { 'success': True }
+
+
+@bp.get('/membros/<int:id>/report.pdf')
+@jwt_required()
+def member_report_pdf(id: int):
+	m = Membro.query.get_or_404(id)
+	# amigos
+	amigos = m.amigos.all()
+	# parentescos (in/out)
+	rels_out = MembroRelacionamento.query.filter_by(source_id=id).all()
+	rels_in = MembroRelacionamento.query.filter_by(target_id=id).all()
+	# histórico
+	hist = MembroHistorico.query.filter_by(membro_id=id).order_by(MembroHistorico.data_movimentacao.asc(), MembroHistorico.id.asc()).all()
+
+	buf = BytesIO()
+	doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=16*mm, bottomMargin=16*mm)
+	styles = getSampleStyleSheet()
+	story = []
+
+	def h(text):
+		story.append(Paragraph(f"<b>{text}</b>", styles['Heading3']))
+		story.append(Spacer(1, 4))
+
+	def row_table(data_pairs):
+		# duas colunas: label e valor; montar em 2 colunas de pares
+		rows = []
+		for label, value in data_pairs:
+			val = '-' if value in (None, '') else str(value)
+			rows.append([Paragraph(f"<b>{label}</b>", styles['Normal']), Paragraph(val, styles['Normal'])])
+		t = Table(rows, colWidths=[40*mm, 120*mm])
+		t.setStyle(TableStyle([
+			('VALIGN',(0,0),(-1,-1),'TOP'),
+			('BOTTOMPADDING',(0,0),(-1,-1),4),
+			('TOPPADDING',(0,0),(-1,-1),2),
+			('INNERGRID',(0,0),(-1,-1),0.25,colors.lightgrey),
+			('BOX',(0,0),(-1,-1),0.25,colors.lightgrey),
+		]))
+		story.append(t)
+		story.append(Spacer(1, 8))
+
+	# Cabeçalho
+	h('Relatório do Membro')
+	row_table([
+		('Membro', m.nome),
+		('Sexo', m.sexo),
+		('Concurso', m.concurso),
+		('Data de inclusão', m.data_inclusao.isoformat() if m.data_inclusao else ''),
+		('Cargo efetivo', m.cargo_efetivo),
+		('Titularidade', m.titularidade),
+		('Email pessoal', m.email_pessoal),
+		('Telefone unidade', m.telefone_unidade),
+		('Telefone celular', m.telefone_celular),
+		('Unidade de lotação', m.unidade_lotacao),
+		('Comarca de lotação', m.comarca_lotacao),
+		('Estado de origem', m.estado_origem),
+	])
+
+	# Outras infos
+	h('Informações adicionais')
+	row_table([
+		('Time/Grupos extraprofissionais', m.time_extraprofissionais),
+		('Quantidade de filhos', m.quantidade_filhos),
+		('Nome dos filhos', m.nomes_filhos),
+		('Acadêmico', m.academico),
+		('Pretensão de movimentação', m.pretensao_carreira),
+		('Carreira anterior', m.carreira_anterior),
+		('Liderança', m.lideranca),
+		('Grupos identitários', m.grupos_identitarios),
+	])
+
+	# Observação (rich)
+	if m.observacao:
+		story.append(Paragraph('<b>Observação</b>', styles['Heading3']))
+		story.append(Spacer(1,4))
+		story.append(Paragraph(m.observacao, styles['Normal']))
+		story.append(Spacer(1,8))
+
+	# Amigos no MP
+	h('Amigos no MP')
+	if amigos:
+		rows = [[Paragraph('<b>Nome</b>', styles['Normal'])]] + [[Paragraph(a.nome or '-', styles['Normal'])] for a in amigos]
+		t = Table(rows, colWidths=[160*mm])
+		t.setStyle(TableStyle([('INNERGRID',(0,0),(-1,-1),0.25,colors.lightgrey),('BOX',(0,0),(-1,-1),0.25,colors.lightgrey),('BACKGROUND',(0,0),(-1,0),colors.whitesmoke)]))
+		story.append(t)
+	else:
+		story.append(Paragraph('Sem registros.', styles['Normal']))
+	story.append(Spacer(1,8))
+
+	# Família (Parentescos)
+	h('Parentescos')
+	def fmt_rel(r, direction):
+		other_id = r.target_id if direction=='out' else r.source_id
+		other = Membro.query.get(other_id)
+		return f"{other.nome if other else ('#'+str(other_id))} — {r.degree} { '(dele)' if direction=='in' else '' }"
+	all_rels = [fmt_rel(r,'out') for r in rels_out] + [fmt_rel(r,'in') for r in rels_in]
+	if all_rels:
+		rows = [[Paragraph('<b>Parente</b>', styles['Normal'])]] + [[Paragraph(s, styles['Normal'])] for s in all_rels]
+		t = Table(rows, colWidths=[160*mm])
+		t.setStyle(TableStyle([('INNERGRID',(0,0),(-1,-1),0.25,colors.lightgrey),('BOX',(0,0),(-1,-1),0.25,colors.lightgrey),('BACKGROUND',(0,0),(-1,0),colors.whitesmoke)]))
+		story.append(t)
+	else:
+		story.append(Paragraph('Sem registros.', styles['Normal']))
+	story.append(Spacer(1,8))
+
+	# Histórico (timeline)
+	h('Histórico de movimentações')
+	if hist:
+		rows = [[Paragraph('<b>Data</b>', styles['Normal']), Paragraph('<b>Unidade</b>', styles['Normal'])]]
+		for h in hist:
+			rows.append([Paragraph(h.data_movimentacao.isoformat() if h.data_movimentacao else '-', styles['Normal']), Paragraph(h.unidade_lotacao or '-', styles['Normal'])])
+		t = Table(rows, colWidths=[40*mm, 120*mm])
+		t.setStyle(TableStyle([('INNERGRID',(0,0),(-1,-1),0.25,colors.lightgrey),('BOX',(0,0),(-1,-1),0.25,colors.lightgrey),('BACKGROUND',(0,0),(-1,0),colors.whitesmoke)]))
+		story.append(t)
+	else:
+		story.append(Paragraph('Sem registros.', styles['Normal']))
+
+	doc.build(story)
+	buf.seek(0)
+	filename = f"membro_{id}.pdf"
+	return send_file(buf, mimetype='application/pdf', as_attachment=False, download_name=filename) 

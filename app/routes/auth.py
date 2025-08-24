@@ -3,7 +3,7 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 from ..db import db
 from ..models import User
 from datetime import datetime, timedelta
-import os, random, string, logging, smtplib
+import os, random, string, logging, smtplib, socket
 from email.message import EmailMessage
 from flask import current_app
 
@@ -74,23 +74,43 @@ def forgot_password():
 		# Envio: SMTP se configurado, senão log
 		try:
 			cfg = current_app.config
-			server = cfg.get('MAIL_SERVER')
-			username = cfg.get('MAIL_USERNAME')
-			password = cfg.get('MAIL_PASSWORD')
-			sender = cfg.get('MAIL_DEFAULT_SENDER') or username
+			server = (cfg.get('MAIL_SERVER') or '').strip()
+			username = (cfg.get('MAIL_USERNAME') or '').strip()
+			password = (cfg.get('MAIL_PASSWORD') or '').strip()
+			sender = (cfg.get('MAIL_DEFAULT_SENDER') or username).strip()
 			port = int(cfg.get('MAIL_PORT') or 587)
 			use_tls = bool(cfg.get('MAIL_USE_TLS'))
 			if server and username and password and sender:
+				# Monta mensagem
 				msg = EmailMessage()
 				msg['Subject'] = 'Código para redefinição de senha'
 				msg['From'] = sender
 				msg['To'] = email
 				msg.set_content(f'Seu código de redefinição é {code}. Ele expira em 15 minutos.')
-				with smtplib.SMTP(server, port, timeout=10) as smtp:
-					if use_tls:
-						smtp.starttls()
-					smtp.login(username, password)
-					smtp.send_message(msg)
+				# Resolve A records (IPv4) e tenta por IP para evitar rota IPv6 inexistente
+				target_hosts = []
+				try:
+					infos = socket.getaddrinfo(server, port, socket.AF_INET, socket.SOCK_STREAM)
+					ips = [ai[4][0] for ai in infos]
+					# ordem preservada/únicos
+					target_hosts = list(dict.fromkeys(ips))
+				except Exception:
+					# fallback: usa hostname direto
+					target_hosts = [server]
+				last_err = None
+				for host in (target_hosts or [server]):
+					try:
+						with smtplib.SMTP(host, port, timeout=10) as smtp:
+							if use_tls:
+								smtp.starttls()
+							smtp.login(username, password)
+							smtp.send_message(msg)
+						last_err = None
+						break
+					except Exception as e_send:
+						last_err = e_send
+				if last_err:
+					raise last_err
 			else:
 				logger.info('Código de reset para %s: %s (válido por 15 min)', email, code)
 		except Exception as e:

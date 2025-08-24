@@ -75,6 +75,8 @@
 		.tl-item::before { content:''; position:absolute; left:-1px; top:6px; width:10px; height:10px; border-radius:999px; background:#334155 }
 		.tl-head { font-weight:600; color:#0f172a }
 		.tl-sub { color:#475569; font-size:12px }
+		/* richtext (observação) */
+		.rt { padding: 8px; border:1px solid #cbd5e1; border-radius:6px; min-height:160px; width:100%; box-sizing:border-box; background:#fff }
 	</style>
 </head>
 <body>
@@ -364,6 +366,9 @@
 					<button class='icon-btn' title='Histórico' onclick='openHistory(${r.id})'>
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/><path d="M12 7v5l3 3"/></svg>
 					</button>
+					<button class='icon-btn' title='Relatório (PDF)' onclick='openReport(${r.id})'>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+					</button>
 				</td>
 			`
 			tbody.appendChild(tr)
@@ -441,17 +446,22 @@
 		let html = `<div class='form-grid'>`
 		for(const k of fields){
 			const v = currentData[k] ?? ''
+			if(k==='Observação'){
+				if(admin){
+					html += `<div class='row' style='grid-column: 1 / -1'><label class='label'>${k}</label><div class='rt' contenteditable='true' data-key='${k}'>${String(v||'')}</div></div>`
+				} else {
+					html += `<div class='row' style='grid-column: 1 / -1'><label class='label'>${k}</label><div>${v||'-'}</div></div>`
+				}
+				continue
+			}
 			html += `<div class='row'><label class='label'>${k}</label>`
 			if(admin){
 				if(k==='Sexo') html += `<select class='input' data-key='${k}'><option value=''></option><option ${v==='Masculino'?'selected':''}>Masculino</option><option ${v==='Feminino'?'selected':''}>Feminino</option></select>`
-				else if(lookupFieldMap[k]){
-					const type=lookupFieldMap[k]; const vals=(lookupCache[type]||[]);
-					html += `<select class='input' data-key='${k}'><option value=''></option>${vals.map(opt=>`<option ${String(v)===String(opt)?'selected':''}>${opt}</option>`).join('')}</select>`
-				} else if(k==='Quantidade de filhos') html += `<input class='input' data-key='${k}' type='number' min='0' value='${v||''}' />`
+				else if(lookupFieldMap[k]){ const type=lookupFieldMap[k]; const vals=(lookupCache[type]||[]); html += `<select class='input' data-key='${k}'><option value=''></option>${vals.map(opt=>`<option ${String(v)===String(opt)?'selected':''}>${opt}</option>`).join('')}</select>` }
+				else if(k==='Quantidade de filhos') html += `<input class='input' data-key='${k}' type='number' min='0' value='${v||''}' />`
+				else if(k==='Data de inclusão') html += `<input class='input' data-key='${k}' type='date' value='${(v||'')}' />`
 				else html += `<input class='input' data-key='${k}' value='${String(v).replace(/\"/g,'&quot;')}' />`
-			} else {
-				html += `<div>${v||'-'}</div>`
-			}
+			} else { html += `<div>${v||'-'}</div>` }
 			html += `</div>`
 		}
 		// Se admin, bloco para amigos no MP
@@ -921,6 +931,18 @@
  		if(r.ok){ toast('Movimentação salva','success'); loadHistory() } else { let msg=`Falha ao salvar (${r.status})`; try{ const d=await r.json(); if(d?.message) msg=d.message }catch{}; toast(msg,'error') }
  	}
  	async function histDelete(id){ if(!confirm('Excluir esta movimentação?')) return; const r=await fetch(`/api/historico/${id}`, { method:'DELETE', headers:{ ...auth() } }); if(r.ok){ toast('Excluída','success'); loadHistory() } else { toast('Falha ao excluir','error') } }
+
+	function plainText(html){ try{ const div=document.createElement('div'); div.innerHTML=String(html||''); return (div.textContent||div.innerText||''); }catch{return String(html||'') } }
+
+	async function openReport(id){
+		guard();
+		try{
+			const r=await fetch(`/api/membros/${id}/report.pdf`, { headers:{ ...auth() } })
+			if(r.status===401||r.status===422){ toast('Sessão expirada','error'); localStorage.removeItem('token'); location.href='/login'; return }
+			if(!r.ok){ let msg=`Falha ao gerar relatório (${r.status})`; try{ const t=await r.text(); if(t) msg += `: ${t.substring(0,200)}` }catch{} toast(msg,'error'); return }
+			const blob = await r.blob(); const url = URL.createObjectURL(blob); window.open(url, '_blank', 'noopener'); setTimeout(()=>URL.revokeObjectURL(url), 15000)
+		}catch(e){ toast('Erro ao gerar relatório','error') }
+	}
 	</script>
 </body>
 </html> 

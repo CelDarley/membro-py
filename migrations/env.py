@@ -40,7 +40,7 @@ config.set_main_option('sqlalchemy.url', get_engine_url())
 target_db = current_app.extensions['migrate'].db
 
 # Restrição de tabelas gerenciadas por este app
-MANAGED_TABLES = {'users', 'users_py', 'membros', 'membro_amigos', 'lookups'}
+MANAGED_TABLES = {'users', 'users_py', 'membros', 'membro_amigos', 'lookups', 'membro_relacionamentos'}
 
 
 def include_object(object, name, type_, reflected, compare_to):
