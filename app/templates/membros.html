@@ -866,57 +866,59 @@
 		await loadHistory()
 	}
 	async function loadHistory(){
-		try{ const r=await fetch(`/api/membros/${currentId}/historico`, { headers:{ ...auth() } }); const d=await r.json(); histList = d.data||[]; renderHistoryUI(d) }catch(e){ document.getElementById('modalBody').textContent='Falha ao carregar histórico' }
+		try{
+			const r=await fetch(`/api/membros/${currentId}/historico`, { headers:{ ...auth() } })
+			if(r.status===401||r.status===422){ document.getElementById('modalBody').textContent='Sessão expirada. Redirecionando...'; setTimeout(()=>{ localStorage.removeItem('token'); location.href='/login' }, 900); return }
+			if(!r.ok){ let msg=`Falha ao carregar (${r.status})`; try{ const d=await r.json(); if(d?.message) msg=d.message }catch{ try{ const t=await r.text(); if(t) msg+=`: ${t.substring(0,200)}` }catch{} } document.getElementById('modalBody').textContent = msg; return }
+			const d=await r.json(); histList = d.data||[]; renderHistoryUI(d)
+		}catch(e){ document.getElementById('modalBody').textContent='Falha ao carregar histórico' }
 	}
 	function fmtDateBR(s){ try{ if(!s) return ''; const [y,m,d]=String(s).split('-'); return `${d}/${m}/${y}` }catch{return s||''} }
 	function renderHistoryUI(meta){
-		const valsUL = (lookupCache['unidade_lotacao']||[]); const valsCL=(lookupCache['comarca_lotacao']||[])
-		let html = ''
-		html += `<div class='row'><div><strong>Concurso:</strong> ${meta?.concurso||'-'}</div><div><strong>Data de inclusão:</strong> ${fmtDateBR(meta?.data_inclusao)||'-'}</div></div>`
-		html += `<div class='timeline' id='histTL'>${(histList||[]).map(it=>(
-			`<div class='tl-item'>
-				<div class='tl-head'>${fmtDateBR(it.data_movimentacao)||'-'}</div>
-				<div class='tl-sub'>Unidade: ${it.unidade_lotacao||'-'} | Comarca: ${it.comarca_lotacao||'-'}</div>
-				${isAdmin()? `<div style='display:grid; grid-template-columns: 160px 1fr 1fr auto; gap:8px; margin-top:6px'>
-					<input type='date' class='input' value='${it.data_movimentacao||''}' data-hk='date' data-id='${it.id}' />
-					<select class='input' data-hk='ul' data-id='${it.id}'><option value=''></option>${valsUL.map(v=>`<option ${String(v)===String(it.unidade_lotacao)?'selected':''}>${v}</option>`).join('')}</select>
-					<select class='input' data-hk='cl' data-id='${it.id}'><option value=''></option>${valsCL.map(v=>`<option ${String(v)===String(it.comarca_lotacao)?'selected':''}>${v}</option>`).join('')}</select>
-					<div style='display:flex; gap:6px'>
-						<button class='btn' onclick='histSave(${it.id})'>Salvar</button>
-						<button class='btn' onclick='histDelete(${it.id})'>Excluir</button>
-					</div>
-				</div>` : ''}
-			</div>`
-		)).join('')}</div>`
-		if(isAdmin()){
-			html += `<div class='row' style='margin-top:12px'>
-				<strong>Adicionar movimentação</strong>
-				<div style='display:grid; grid-template-columns: 160px 1fr 1fr auto; gap:8px'>
-					<input type='date' class='input' id='histNewDate' />
-					<select class='input' id='histNewUL'><option value=''></option>${valsUL.map(v=>`<option>${v}</option>`).join('')}</select>
-					<select class='input' id='histNewCL'><option value=''></option>${valsCL.map(v=>`<option>${v}</option>`).join('')}</select>
-					<button class='btn' onclick='histAdd()'>Adicionar</button>
-				</div>
-			</div>`
-		}
-		document.getElementById('modalBody').innerHTML = html
-	}
-	async function histAdd(){
-		const date=(document.getElementById('histNewDate')||{}).value||''
-		const unidade_lotacao=(document.getElementById('histNewUL')||{}).value||''
-		const comarca_lotacao=(document.getElementById('histNewCL')||{}).value||''
-		if(!date){ toast('Informe a data','error'); return }
-		const r=await fetch(`/api/membros/${currentId}/historico`, { method:'POST', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ data_movimentacao: date, unidade_lotacao, comarca_lotacao }) })
-		if(r.ok){ toast('Movimentação adicionada','success'); loadHistory() } else { let msg=`Falha ao adicionar (${r.status})`; try{ const d=await r.json(); if(d?.message) msg=d.message }catch{}; toast(msg,'error') }
-	}
-	async function histSave(id){
-		const sel=(k)=>{ const el=document.querySelector(`[data-hk='${k}'][data-id='${id}']`); return el? el.value : '' }
-		const body={ data_movimentacao: sel('date'), unidade_lotacao: sel('ul'), comarca_lotacao: sel('cl') }
-		if(!body.data_movimentacao){ toast('Informe a data','error'); return }
-		const r=await fetch(`/api/historico/${id}`, { method:'PUT', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify(body) })
-		if(r.ok){ toast('Movimentação salva','success'); loadHistory() } else { let msg=`Falha ao salvar (${r.status})`; try{ const d=await r.json(); if(d?.message) msg=d.message }catch{}; toast(msg,'error') }
-	}
-	async function histDelete(id){ if(!confirm('Excluir esta movimentação?')) return; const r=await fetch(`/api/historico/${id}`, { method:'DELETE', headers:{ ...auth() } }); if(r.ok){ toast('Excluída','success'); loadHistory() } else { toast('Falha ao excluir','error') } }
+		const valsUL = (lookupCache['unidade_lotacao']||[]);
+ 		let html = ''
+ 		html += `<div class='row'><div><strong>Concurso:</strong> ${meta?.concurso||'-'}</div><div><strong>Data de inclusão:</strong> ${fmtDateBR(meta?.data_inclusao)||'-'}</div></div>`
+ 		html += `<div class='timeline' id='histTL'>${(histList||[]).map(it=>(
+ 			`<div class='tl-item'>
+ 				<div class='tl-head'>${fmtDateBR(it.data_movimentacao)||'-'}</div>
+ 				<div class='tl-sub'>Unidade: ${it.unidade_lotacao||'-'}</div>
+ 				${isAdmin()? `<div style='display:grid; grid-template-columns: 160px 1fr auto; gap:8px; margin-top:6px'>
+ 					<input type='date' class='input' value='${it.data_movimentacao||''}' data-hk='date' data-id='${it.id}' />
+ 					<select class='input' data-hk='ul' data-id='${it.id}'><option value=''></option>${valsUL.map(v=>`<option ${String(v)===String(it.unidade_lotacao)?'selected':''}>${v}</option>`).join('')}</select>
+ 					<div style='display:flex; gap:6px'>
+ 						<button class='btn' onclick='histSave(${it.id})'>Salvar</button>
+ 						<button class='btn' onclick='histDelete(${it.id})'>Excluir</button>
+ 					</div>
+ 				</div>` : ''}
+ 			</div>`
+ 		)).join('')}</div>`
+ 		if(isAdmin()){
+ 			html += `<div class='row' style='margin-top:12px'>
+ 				<strong>Adicionar movimentação</strong>
+ 				<div style='display:grid; grid-template-columns: 160px 1fr auto; gap:8px'>
+ 					<input type='date' class='input' id='histNewDate' />
+ 					<select class='input' id='histNewUL'><option value=''></option>${valsUL.map(v=>`<option>${v}</option>`).join('')}</select>
+ 					<button class='btn' onclick='histAdd()'>Adicionar</button>
+ 				</div>
+ 			</div>`
+ 		}
+ 		document.getElementById('modalBody').innerHTML = html
+ 	}
+ 	async function histAdd(){
+ 		const date=(document.getElementById('histNewDate')||{}).value||''
+ 		const unidade_lotacao=(document.getElementById('histNewUL')||{}).value||''
+ 		if(!date){ toast('Informe a data','error'); return }
+ 		const r=await fetch(`/api/membros/${currentId}/historico`, { method:'POST', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ data_movimentacao: date, unidade_lotacao }) })
+ 		if(r.ok){ toast('Movimentação adicionada','success'); loadHistory() } else { let msg=`Falha ao adicionar (${r.status})`; try{ const d=await r.json(); if(d?.message) msg=d.message }catch{}; toast(msg,'error') }
+ 	}
+ 	async function histSave(id){
+ 		const sel=(k)=>{ const el=document.querySelector(`[data-hk='${k}'][data-id='${id}']`); return el? el.value : '' }
+ 		const body={ data_movimentacao: sel('date'), unidade_lotacao: sel('ul') }
+ 		if(!body.data_movimentacao){ toast('Informe a data','error'); return }
+ 		const r=await fetch(`/api/historico/${id}`, { method:'PUT', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify(body) })
+ 		if(r.ok){ toast('Movimentação salva','success'); loadHistory() } else { let msg=`Falha ao salvar (${r.status})`; try{ const d=await r.json(); if(d?.message) msg=d.message }catch{}; toast(msg,'error') }
+ 	}
+ 	async function histDelete(id){ if(!confirm('Excluir esta movimentação?')) return; const r=await fetch(`/api/historico/${id}`, { method:'DELETE', headers:{ ...auth() } }); if(r.ok){ toast('Excluída','success'); loadHistory() } else { toast('Falha ao excluir','error') } }
 	</script>
 </body>
 </html> 
