@@ -53,6 +53,8 @@ class Membro(db.Model):
 	carreira_anterior = db.Column(db.Text)
 	lideranca = db.Column(db.Text)
 	grupos_identitarios = db.Column(db.Text)
+	# nova: data de inclusão no MP/carreira (para início da timeline)
+	data_inclusao = db.Column(db.Date)
 
 	amigos = db.relationship(
 		'Membro',
@@ -64,9 +66,28 @@ class Membro(db.Model):
 	)
 
 
+class MembroRelacionamento(db.Model):
+	__tablename__ = 'membro_relacionamentos'
+	id = db.Column(MySQLBigInt(unsigned=True), primary_key=True)
+	source_id = db.Column(MySQLBigInt(unsigned=True), db.ForeignKey('membros.id'), nullable=False, index=True)
+	target_id = db.Column(MySQLBigInt(unsigned=True), db.ForeignKey('membros.id'), nullable=False, index=True)
+	# graus: spouse, parent, child, sibling
+	degree = db.Column(db.String(20), nullable=False, index=True)
+	__table_args__ = (db.UniqueConstraint('source_id', 'target_id', 'degree', name='uq_rel_source_target_degree'),)
+
+
 class Lookup(db.Model):
 	__tablename__ = 'lookups'
 	id = db.Column(MySQLBigInt(unsigned=True), primary_key=True)
 	type = db.Column(db.String(64), index=True, nullable=False)
 	value = db.Column(db.String(255), nullable=False)
-	__table_args__ = (db.UniqueConstraint('type', 'value', name='uq_lookups_type_value'),) 
+	__table_args__ = (db.UniqueConstraint('type', 'value', name='uq_lookups_type_value'),)
+
+
+class MembroHistorico(db.Model):
+	__tablename__ = 'membro_historico'
+	id = db.Column(MySQLBigInt(unsigned=True), primary_key=True)
+	membro_id = db.Column(MySQLBigInt(unsigned=True), db.ForeignKey('membros.id'), nullable=False, index=True)
+	data_movimentacao = db.Column(db.Date, nullable=False)
+	unidade_lotacao = db.Column(db.String(255))
+	comarca_lotacao = db.Column(db.String(255)) 

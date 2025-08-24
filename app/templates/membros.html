@@ -68,6 +68,13 @@
 		.icon-btn:hover svg { color:#334155 }
 		/* coluna de ações na gestão de usuários */
 		.btn-col { display:flex; flex-direction:column; gap:4px }
+		/* timeline de histórico */
+		.timeline { position:relative; margin-top:8px; padding-left:16px }
+		.timeline::before { content:''; position:absolute; left:6px; top:0; bottom:0; width:2px; background:#e2e8f0 }
+		.tl-item { position:relative; margin:10px 0; padding-left:12px }
+		.tl-item::before { content:''; position:absolute; left:-1px; top:6px; width:10px; height:10px; border-radius:999px; background:#334155 }
+		.tl-head { font-weight:600; color:#0f172a }
+		.tl-sub { color:#475569; font-size:12px }
 	</style>
 </head>
 <body>
@@ -100,11 +107,15 @@
 	</div>
 
 	<div id="panelTable" style="display:block">
+		<div class="toolbar" style="justify-content:flex-end; margin-top:-8px; margin-bottom:8px">
+			<button id="btnNew" class="btn" style="display:none" onclick="openCreate()">Novo Membro</button>
+		</div>
 		<div class="table-wrap">
 			<table class="table" id="tbl"><thead><tr>
 				<th class="freeze-left" data-label="Membro" onclick="openFilterModal('Membro')">Membro</th>
 				<th data-label="Sexo" onclick="openFilterModal('Sexo')">Sexo</th>
 				<th data-label="Concurso" onclick="openFilterModal('Concurso')">Concurso</th>
+				<th data-label="Data de inclusão" onclick="openFilterModal('Data de inclusão')">Data de inclusão</th>
 				<th data-label="Cargo efetivo" onclick="openFilterModal('Cargo efetivo')">Cargo efetivo</th>
 				<th data-label="Titularidade" onclick="openFilterModal('Titularidade')">Titularidade</th>
 				<th data-label="eMail pessoal" onclick="openFilterModal('eMail pessoal')">eMail pessoal</th>
@@ -136,8 +147,27 @@
 		<div class="grid">
 			<div class="card"><div class="card-body"><div style="display:flex;justify-content:space-between"><strong>Top 20 por Comarca</strong><button class="btn" onclick="loadChartComarca()">Atualizar</button></div><div id="chartComarca" style="width:100%;height:320px"></div></div></div>
 			<div class="card"><div class="card-body"><div style="display:flex;justify-content:space-between"><strong>Top 10 por Cargo efetivo</strong><button class="btn" onclick="loadChartCargo()">Atualizar</button></div><div id="chartCargo" style="width:100%;height:320px"></div></div></div>
-			<div class="card"><div class="card-body"><div style="display:flex;justify-content:space-between"><strong>Mapa por Comarca (MG)</strong><button class="btn" onclick="loadMap()">Atualizar</button></div><div id="chartMap" style="width:100%;height:420px"></div><div id="mapMsg" style="opacity:.8;font-size:12px"></div></div></div>
-			<div class="card"><div class="card-body"><div style="display:flex;justify-content:space-between"><strong>Relacionamentos (Amigos no MP)</strong><button class="btn" onclick="loadGraph()">Atualizar</button></div><div id="chartGraph" style="width:100%;height:420px"></div><div id="graphMsg" style="opacity:.8;font-size:12px"></div></div></div>
+			<div class="card"><div class="card-body">
+				<div style="display:flex;justify-content:space-between; gap:8px; align-items:center">
+					<strong>Relacionamentos (Amigos no MP)</strong>
+					<div style="display:flex; gap:8px; align-items:center">
+						<input id="graphFilter" class="input" placeholder="Filtrar por membro..." oninput="debouncedLoadGraph()" style="max-width:280px" />
+						<button class="btn" onclick="loadGraph()">Atualizar</button>
+					</div>
+				</div>
+				<div id="chartGraph" style="width:100%;height:420px"></div><div id="graphMsg" style="opacity:.8;font-size:12px"></div>
+			</div></div>
+			<div class="card"><div class="card-body">
+				<div style="display:flex;justify-content:space-between; gap:8px; align-items:center">
+					<strong>Relacionamentos de Parentesco</strong>
+					<div style="display:flex; gap:8px; align-items:center">
+						<input id="kinFilter" class="input" placeholder="Filtrar por membro..." oninput="debouncedLoadKinGraph()" style="max-width:280px" />
+						<button class="btn" onclick="loadKinGraph()">Atualizar</button>
+					</div>
+				</div>
+				<div id="chartKin" style="width:100%;height:420px"></div><div id="kinMsg" style="opacity:.8;font-size:12px"></div>
+			</div></div>
+			<div class="card"><div class="card-body"><div style="display:flex;justify-content:space-between; gap:8px; align-items:center"><strong>Mapa por Comarca (Pinos)</strong><div style="display:flex; gap:8px; align-items:center"><input id="pinFilter" class="input" placeholder="Filtrar por membro..." oninput="debouncedLoadPinMap()" style="max-width:280px" /><button class="btn" onclick="loadPinMap()">Atualizar</button></div></div><div id="chartPinMap" style="width:100%;height:420px"></div><div id="pinMsg" style="opacity:.8;font-size:12px"></div></div></div>
 		</div>
 	</div>
 
@@ -241,6 +271,18 @@
 		</div>
 	</div>
 
+	<div class="modal" id="createModal">
+		<div class="modal-inner">
+			<div style="display:flex; justify-content:space-between; align-items:center"><strong>Novo Membro</strong>
+				<div style="display:flex; gap:8px">
+					<button class="btn" onclick="saveCreate()">Salvar</button>
+					<button class="btn" onclick="closeCreate()">Fechar</button>
+				</div>
+			</div>
+			<div id="createBody" class="form-grid" style="margin-top:8px"></div>
+		</div>
+	</div>
+
 	<script>
 	function guard(){ if(!localStorage.getItem('token')) location.href='/login' }
 	function token(){ return localStorage.getItem('token') || '' }
@@ -251,8 +293,22 @@
 	function toast(msg, type){ const box=document.getElementById('toasts'); const el=document.createElement('div'); el.className='toast'+(type?(' '+type):''); el.textContent=msg; box.appendChild(el); setTimeout(()=>{ el.remove() }, 3500) }
 
 	let currentId = null; let currentData = null; let currentUser = null; let lookupsInited = false;
+	const lookupFieldMap = {
+		'Concurso': 'concurso',
+		'Cargo efetivo': 'cargo_efetivo',
+		'Titularidade': 'titularidade',
+		'Cargo Especial': 'cargo_especial',
+		'Unidade Lotação': 'unidade_lotacao',
+		'Comarca Lotação': 'comarca_lotacao',
+		'Time de futebol e outros grupos extraprofissionais': 'time_extraprofissionais',
+		'Estado de origem': 'estado_origem',
+		'Grupos identitários': 'grupos_identitarios',
+	}
+	let lookupCache = {} // { type: [values] }
+	async function loadLookup(type){ if(lookupCache[type]) return lookupCache[type]; const r=await fetch(`/api/lookups?type=${encodeURIComponent(type)}&page=1&per_page=500`, { headers:{ ...auth() } }); const d=await r.json(); const vals=(d.data||[]).map(it=>String(it.value)); lookupCache[type]=vals; return vals }
+	async function ensureLookupsLoaded(){ const types = Array.from(new Set(Object.values(lookupFieldMap))); await Promise.all(types.map(t=>loadLookup(t))) }
 	const fields = [
-		'Membro','Sexo','Concurso','Cargo efetivo','Titularidade','eMail pessoal','Cargo Especial','Telefone Unidade','Telefone celular','Unidade Lotação','Comarca Lotação','Time de futebol e outros grupos extraprofissionais','Quantidade de filhos','Nome dos filhos','Estado de origem','Acadêmico','Pretensão de movimentação na carreira','Carreira anterior','Liderança','Grupos identitários'
+		'Membro','Sexo','Concurso','Data de inclusão','Cargo efetivo','Titularidade','eMail pessoal','Cargo Especial','Telefone Unidade','Telefone celular','Unidade Lotação','Comarca Lotação','Time de futebol e outros grupos extraprofissionais','Quantidade de filhos','Nome dos filhos','Estado de origem','Acadêmico','Pretensão de movimentação na carreira','Carreira anterior','Liderança','Grupos identitários'
 	]
 	let perPage = 13, currentPage = 1, totalCount = 0, chartsLoaded = false
 	let columnFilters = {} // { label: [values] }
@@ -271,7 +327,7 @@
 
 	function toggleProfile(){ const m=document.getElementById('profileMenu'); m.style.display = (m.style.display==='block'?'none':'block') }
 	document.addEventListener('click', (e)=>{ const p=document.getElementById('profile'); if(!p.contains(e.target)) document.getElementById('profileMenu').style.display='none' })
-	function renderProfile(){ const n=(currentUser?.name||'').trim(); const em=(currentUser?.email||'').trim(); const ini=(n?n[0]: (em?em[0]:'?')).toUpperCase(); document.getElementById('avatar').textContent=ini; document.getElementById('profileName').textContent=n||em||'Usuário'; document.getElementById('menuName').textContent=n||'Usuário'; document.getElementById('menuEmail').textContent=em||''; const tabL=document.getElementById('tabLookups'); tabL.style.display = isAdmin() ? 'inline-block' : 'none'; const tabU=document.getElementById('tabUsers'); tabU.style.display = isAdmin() ? 'inline-block' : 'none' }
+	function renderProfile(){ const n=(currentUser?.name||'').trim(); const em=(currentUser?.email||'').trim(); const ini=(n?n[0]: (em?em[0]:'?')).toUpperCase(); document.getElementById('avatar').textContent=ini; document.getElementById('profileName').textContent=n||em||'Usuário'; document.getElementById('menuName').textContent=n||'Usuário'; document.getElementById('menuEmail').textContent=em||''; const tabL=document.getElementById('tabLookups'); tabL.style.display = isAdmin() ? 'inline-block' : 'none'; const tabU=document.getElementById('tabUsers'); tabU.style.display = isAdmin() ? 'inline-block' : 'none'; const bNew=document.getElementById('btnNew'); if(bNew) bNew.style.display = isAdmin() ? 'inline-block' : 'none' }
 	async function loadMe(){ try{ const r=await fetch('/api/auth/me', { headers:{ ...auth() } }); const d=await r.json(); currentUser = d?.user||null; renderProfile() }catch{} }
 	function doLogout(){ localStorage.removeItem('token'); location.href='/login' }
 
@@ -284,6 +340,7 @@
 				<td class='freeze-left'>${r.data['Membro']||''}</td>
 				<td>${r.data['Sexo']||''}</td>
 				<td>${r.data['Concurso']||''}</td>
+				<td>${r.data['Data de inclusão']||''}</td>
 				<td>${r.data['Cargo efetivo']||''}</td>
 				<td>${r.data['Titularidade']||''}</td>
 				<td>${r.data['eMail pessoal']||''}</td>
@@ -300,7 +357,12 @@
 				<td>${r.data['Carreira anterior']||''}</td>
 				<td>${r.data['Liderança']||''}</td>
 				<td>${r.data['Grupos identitários']||''}</td>
-				<td class='freeze-right'><button class='btn' onclick='openModal(${r.id})'>Ver</button></td>
+				<td class='freeze-right'>
+					<button class='btn' onclick='openModal(${r.id})'>Ver</button>
+					<button class='icon-btn' title='Histórico' onclick='openHistory(${r.id})'>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/><path d="M12 7v5l3 3"/></svg>
+					</button>
+				</td>
 			`
 			tbody.appendChild(tr)
 		}
@@ -341,9 +403,11 @@
 			if(!r.ok){ document.getElementById('modalBody').textContent = 'Falha ao carregar detalhes'; return }
 			const row = await r.json(); currentData = (row && (row.data||row)) || {}
 		}catch(e){ document.getElementById('modalBody').textContent = 'Erro ao carregar detalhes'; return }
+		await ensureLookupsLoaded();
 		renderModal()
 	}
 	let amigoIds = new Set(); let amigoNames = []
+	let relList = []; let relTargetId = null; let relTargetName = ''
 	async function loadAmigosInitial(){
 		const ids = currentData['Amigos no MP (IDs)']||[]; const nomes = currentData['Amigos no MP (Nomes)']||[]
 		amigoIds = new Set(Array.isArray(ids)? ids.map(n=>Number(n)).filter(n=>Number.isFinite(n)) : [])
@@ -378,9 +442,9 @@
 			html += `<div class='row'><label class='label'>${k}</label>`
 			if(admin){
 				if(k==='Sexo') html += `<select class='input' data-key='${k}'><option value=''></option><option ${v==='Masculino'?'selected':''}>Masculino</option><option ${v==='Feminino'?'selected':''}>Feminino</option></select>`
-				else if(k==='Estado de origem'){
-					const ufs=['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
-					html += `<select class='input' data-key='${k}'><option value=''></option>${ufs.map(uf=>`<option ${v===uf?'selected':''}>${uf}</option>`).join('')}</select>`
+				else if(lookupFieldMap[k]){
+					const type=lookupFieldMap[k]; const vals=(lookupCache[type]||[]);
+					html += `<select class='input' data-key='${k}'><option value=''></option>${vals.map(opt=>`<option ${String(v)===String(opt)?'selected':''}>${opt}</option>`).join('')}</select>`
 				} else if(k==='Quantidade de filhos') html += `<input class='input' data-key='${k}' type='number' min='0' value='${v||''}' />`
 				else html += `<input class='input' data-key='${k}' value='${String(v).replace(/\"/g,'&quot;')}' />`
 			} else {
@@ -391,20 +455,124 @@
 		// Se admin, bloco para amigos no MP
 		if(admin){
 			html += `<div class='row'><label class='label'>Amigos no MP</label><div id='amigosBox'></div></div>`
+			// Parentescos
+			html += `<div class='row'><label class='label'>Parentescos</label><div id='relBox'></div></div>`
 		}
 		html += `</div>`
 		document.getElementById('modalBody').innerHTML = html
 		if(admin){ loadAmigosInitial(); renderAmigosUI(document.getElementById('amigosBox')) }
+		if(admin){ loadRelationships(); }
+	}
+
+	async function loadRelationships(){
+		try{ const r=await fetch(`/api/membros/${currentId}/relationships`, { headers:{ ...auth() } }); const d=await r.json(); relList = d.data||[] }catch{ relList=[] }
+		renderRelationshipsUI(document.getElementById('relBox'))
+	}
+	function renderRelationshipsUI(container){
+		if(!container) return; container.innerHTML=''
+		// lista atual
+		const list=document.createElement('div')
+		if(!relList.length){ list.innerHTML='<div style="opacity:.7">Sem parentescos.</div>' }
+		else{
+			list.innerHTML = relList.map(r=>`<div class='chip'><span>${r.other_name} — ${mapDegree(r.degree)} ${r.direction==='in'?'(dele)':''}</span> <button onclick='deleteRelationship(${r.id})' title='Remover'>&times;</button></div>`).join('')
+		}
+		container.appendChild(list)
+		// formulário de adição
+		const form=document.createElement('div')
+		form.innerHTML = `
+			<div style='display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:8px'>
+				<select id='relDegree' class='input'>
+					<option value=''>Grau...</option>
+					<option value='spouse'>Esposo(a)</option>
+					<option value='parent'>Pai/Mãe</option>
+					<option value='child'>Filho(a)</option>
+					<option value='sibling'>Irmão(ã)</option>
+				</select>
+				<div style='position:relative'>
+					<input id='relSearch' class='input' placeholder='Buscar membro...' oninput='relDebouncedSuggest()' />
+					<div id='relSuggest' class='suggest' style='display:none; position:absolute; left:0; right:0'></div>
+				</div>
+			</div>
+			<div style='margin-top:8px'><button class='btn' onclick='addRelationship()'>Adicionar parentesco</button></div>
+		`
+		container.appendChild(form)
+	}
+	function mapDegree(d){ switch(String(d||'').toLowerCase()){ case 'spouse': return 'Esposo(a)'; case 'parent': return 'Pai/Mãe'; case 'child': return 'Filho(a)'; case 'sibling': return 'Irmão(ã)'; default: return d } }
+	let relTimer=null
+	function relDebouncedSuggest(){ clearTimeout(relTimer); relTimer=setTimeout(relSuggest, 200) }
+	async function relSuggest(){
+		const el=document.getElementById('relSearch'); const box=document.getElementById('relSuggest'); if(!el||!box) return; const q=el.value.trim(); if(!q){ box.style.display='none'; box.innerHTML=''; relTargetId=null; return }
+		const r=await fetch(`/api/membros/search-min?q=${encodeURIComponent(q)}`, { headers:{ ...auth() } }); if(!r.ok){ box.style.display='none'; return }
+		const d=await r.json(); const items=(d.data||[]).filter(it=>Number(it.id)!==Number(currentId)); if(!items.length){ box.style.display='none'; box.innerHTML=''; return }
+		box.innerHTML = items.map(it=>`<div onclick='selectRelTarget(${it.id}, ${JSON.stringify(it.nome).replace(/"/g,'&quot;')})'>${it.nome}</div>`).join('')
+		box.style.display='block'
+	}
+	function selectRelTarget(id, nome){ relTargetId=Number(id); relTargetName=String(nome||''); const inp=document.getElementById('relSearch'); if(inp) inp.value=relTargetName; const box=document.getElementById('relSuggest'); if(box){ box.style.display='none'; box.innerHTML='' } }
+	async function addRelationship(){
+		const degree=(document.getElementById('relDegree')||{}).value||''; if(!degree){ toast('Selecione o grau','error'); return }
+		if(!Number.isFinite(relTargetId)||relTargetId===Number(currentId)){ toast('Selecione o membro','error'); return }
+		const r=await fetch(`/api/membros/${currentId}/relationships`, { method:'POST', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ degree, target_id: relTargetId }) })
+		if(r.ok){ toast('Parentesco adicionado','success'); relTargetId=null; relTargetName=''; const inp=document.getElementById('relSearch'); if(inp) inp.value=''; loadRelationships() } else { let msg=`Falha ao adicionar (${r.status})`; try{ const d=await r.json(); if(d?.message) msg=d.message }catch{ try{ const t=await r.text(); if(t) msg+=`: ${t.substring(0,200)}` }catch{} } toast(msg,'error') }
+	}
+	async function deleteRelationship(relId){ if(!confirm('Remover este parentesco?')) return; const r=await fetch(`/api/relationships/${relId}`, { method:'DELETE', headers:{ ...auth() } }); if(r.ok){ toast('Removido','success'); loadRelationships() } else { toast('Falha ao remover','error') } }
+
+	async function openCreate(){
+		if(!isAdmin()){ toast('Apenas administradores', 'error'); return }
+		await ensureLookupsLoaded()
+		const cont = document.getElementById('createBody');
+		let html = ''
+		for(const k of fields){
+			html += `<div class='row'><label class='label'>${k}</label>`
+			if(k==='Sexo') html += `<select class='input' data-key='${k}'><option value=''></option><option>Masculino</option><option>Feminino</option></select>`
+			else if(lookupFieldMap[k]){ const type=lookupFieldMap[k]; const vals=(lookupCache[type]||[]); html += `<select class='input' data-key='${k}'><option value=''></option>${vals.map(opt=>`<option>${opt}</option>`).join('')}</select>` }
+			else if(k==='Quantidade de filhos') html += `<input class='input' data-key='${k}' type='number' min='0' />`
+			else html += `<input class='input' data-key='${k}' />`
+			html += `</div>`
+		}
+		cont.innerHTML = html
+		document.getElementById('createModal').style.display='flex'
+	}
+	function closeCreate(){ document.getElementById('createModal').style.display='none' }
+	async function saveCreate(){
+		const inputs = document.querySelectorAll('#createBody [data-key]')
+		const payload = { }
+		for(const el of inputs){
+			let v = el.value
+			const k = el.getAttribute('data-key')
+			if(k==='Quantidade de filhos'){
+				v = (v===''? '' : String(Number(v)))
+			}else if(typeof v === 'string'){
+				v = v.toUpperCase()
+			}
+			payload[k] = v
+		}
+		try{
+			const r = await fetch('/api/membros', { method:'POST', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ data: payload }) })
+			if(!r.ok){ toast('Falha ao criar', 'error'); return }
+			toast('Membro criado', 'success'); closeCreate(); search(1)
+		}catch(e){ toast('Erro ao criar', 'error') }
 	}
 	async function saveModal(){
 		const inputs = document.querySelectorAll('#modalBody [data-key]')
 		const payload = { }
-		for(const el of inputs){ payload[el.getAttribute('data-key')] = el.value }
+		for(const el of inputs){
+			const key = el.getAttribute('data-key')
+			let val = el.value
+			if(key==='Quantidade de filhos'){
+				const n = Number(val)
+				val = Number.isFinite(n) ? String(n) : ''
+			}else if(typeof val === 'string'){
+				val = val.toUpperCase()
+			}
+			payload[key] = val
+		}
 		// incluir amigos IDs
 		payload['Amigos no MP (IDs)'] = Array.from(amigoIds)
-		const r = await fetch(`/api/membros/${currentId}`, { method:'PUT', headers: { 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ data: payload }) })
-		if(!r.ok){ toast('Falha ao salvar', 'error'); return }
-		toast('Salvo com sucesso', 'success'); closeModal(); search(currentPage)
+		try{
+			const r = await fetch(`/api/membros/${currentId}`, { method:'PUT', headers: { 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ data: payload }) })
+			if(!r.ok){ let msg=`Falha ao salvar (${r.status})`; try{ const d=await r.json(); if(d?.message) msg=d.message }catch{ try{ const t=await r.text(); if(t) msg += `: ${t.substring(0,200)}` }catch{} } toast(msg,'error'); return }
+			toast('Salvo com sucesso', 'success'); closeModal(); search(currentPage)
+		}catch(e){ toast('Erro ao salvar', 'error') }
 	}
 	function closeModal(){ document.getElementById('modal').style.display='none' }
 
@@ -421,7 +589,31 @@
 			tBtn.classList.add('active'); cBtn.classList.remove('active'); lBtn.classList.remove('active'); uBtn.classList.remove('active'); tPanel.style.display='block'; cPanel.style.display='none'; lPanel.style.display='none'; uPanel.style.display='none';
 		}
 	}
-	function loadChartsIfNeeded(){ if(chartsLoaded) return; loadChartComarca(); loadChartCargo(); loadMap(); loadGraph(); chartsLoaded=true }
+	function loadChartsIfNeeded(){ if(chartsLoaded) return; loadChartComarca(); loadChartCargo(); loadPinMap(); loadGraph(); loadKinGraph(); chartsLoaded=true }
+	let kinTimer=null; function debouncedLoadKinGraph(){ clearTimeout(kinTimer); kinTimer=setTimeout(loadKinGraph, 300) }
+	async function loadKinGraph(){
+		const el = document.getElementById('chartKin')
+		const chart = echarts.init(el)
+		// carregar membros (sem filtros da tabela, para mapear todos os nomes)
+		let page=1; const per=500; const maxPages=20; const all=[]
+		try{ while(page<=maxPages){ const r=await fetch(`/api/membros?page=${page}&per_page=${per}`, { headers:{ ...auth() } }); if(!r.ok) break; const d=await r.json(); const rows=d.data||[]; all.push(...rows); if(rows.length<per) break; page++ } }catch{}
+		const idToName={}, nameToId={}; for(const r of all){ const nm=String(r.data['Membro']||r.data['Nome']||('#'+r.id)); idToName[r.id]=nm; const key=nm.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase(); if(key&&!nameToId[key]) nameToId[key]=r.id }
+		// carregar relacionamentos
+		let rels=[]; try{ const rr=await fetch('/api/relationships', { headers:{ ...auth() } }); if(!rr.ok){ let msg=`Falha ao carregar (${rr.status})`; try{ const d=await rr.json(); if(d?.message) msg=d.message }catch{ try{ const t=await rr.text(); if(t) msg+=`: ${t.substring(0,200)}` }catch{} } document.getElementById('kinMsg').textContent=msg; chart.setOption({ series:[{ type:'graph', data:[], links:[] }] }); return } const dd=await rr.json(); rels=dd.data||[] }catch(e){ document.getElementById('kinMsg').textContent='Erro ao carregar'; chart.setOption({ series:[{ type:'graph', data:[], links:[] }] }); return }
+		if(!rels.length){ chart.setOption({ series:[{ type:'graph', data:[], links:[] }] }); document.getElementById('kinMsg').textContent='Sem dados.'; return }
+		// construir grafo
+		const edgeSet=new Set(); const degree={};
+		for(const r of rels){ const a=String(r.source_id), b=String(r.target_id); const key = (Number(a)<Number(b))? `${a}-${b}` : `${b}-${a}`; if(!edgeSet.has(key) && a!==b){ edgeSet.add(key); degree[a]=(degree[a]||0)+1; degree[b]=(degree[b]||0)+1 } }
+		let nodesAll = Array.from(new Set(Array.from(edgeSet).flatMap(k=>k.split('-')))).map(id=>({ id:String(id), name:idToName[id]||('#'+id), value: degree[id]||1 }))
+		if(!nodesAll.length){ chart.setOption({ series:[{ type:'graph', data:[], links:[] }] }); document.getElementById('kinMsg').textContent='Sem relacionamentos.'; return }
+		let linksArr = Array.from(edgeSet).map(k=>{ const [a,b]=k.split('-').map(s=>String(s)); return { source:a, target:b } })
+		let nodesArr = nodesAll
+		const filterName = (document.getElementById('kinFilter')?.value||'').trim()
+		if(filterName){ const norm=(s)=>String(s||'').normalize('NFD').replace(/[^\p{L}\p{N}\s]/gu,'').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase(); const key=norm(filterName); let targetId=nameToId[key]||null; if(!targetId){ for(const [id,nm] of Object.entries(idToName)){ if(norm(nm).includes(key)){ targetId=Number(id); break } } } if(!targetId){ chart.setOption({ series:[{ type:'graph', data:[], links:[] }] }); document.getElementById('kinMsg').textContent='Membro não encontrado.'; return } linksArr=linksArr.filter(e=> (e.source===String(targetId)||e.target===String(targetId))); const keepIds=new Set([String(targetId), ...linksArr.flatMap(e=>[e.source,e.target])]); nodesArr=nodesAll.filter(n=>keepIds.has(String(n.id))) }
+		const nodes = nodesArr.map(n=>({ ...n, symbolSize: Math.max(8, 8+(n.value||0)*2) }))
+		chart.setOption({ tooltip:{ formatter:(p)=>p.data?.name||'' }, series:[{ type:'graph', layout:'force', roam:true, label:{ show:true, position:'right', formatter:'{b}', fontSize:10 }, data:nodes, links: linksArr, force:{ repulsion:120, edgeLength:[30,120] }, lineStyle:{ color:'#94a3b8' }, itemStyle:{ color:'#16a34a' } }] })
+		document.getElementById('kinMsg').textContent=''
+	}
 
 	// Autocomplete + busca em tempo real
 	let suggestTimer = null, searchTimer = null
@@ -491,7 +683,19 @@
 	}
 
 	let mgGeoLoaded=false, mgGeoFeatures=[]
-	async function ensureMG(){ if(mgGeoLoaded) return; try{ const resp=await fetch('https://servicodados.ibge.gov.br/api/v3/malhas/municipios/31?formato=application/vnd.geo+json'); if(resp.ok){ const geo=await resp.json(); if(geo&&Array.isArray(geo.features)&&geo.features.length){ echarts.registerMap('mg_municipios', geo); mgGeoLoaded=true; mgGeoFeatures=geo.features; } } } catch(e) { mgGeoLoaded=false }
+	async function ensureMG(){
+		if(mgGeoLoaded) return;
+		// 1) tenta arquivo local
+		try{
+			const rLocal = await fetch('/static/mg.geo.json')
+			if(rLocal.ok){ const geo=await rLocal.json(); if(geo&&Array.isArray(geo.features)&&geo.features.length){ echarts.registerMap('mg_municipios', geo); mgGeoLoaded=true; mgGeoFeatures=geo.features; return } }
+		}catch(e){}
+		// 2) fallback IBGE
+		try{
+			const r=await fetch('https://servicodados.ibge.gov.br/api/v3/malhas/municipios/31?formato=application/vnd.geo+json')
+			if(r.ok){ const geo=await r.json(); if(geo&&Array.isArray(geo.features)&&geo.features.length){ echarts.registerMap('mg_municipios', geo); mgGeoLoaded=true; mgGeoFeatures=geo.features; return } }
+		}catch(e){}
+		mgGeoLoaded=false
 	}
 	async function loadMap(){
 		await ensureMG()
@@ -510,6 +714,7 @@
 		document.getElementById('mapMsg').textContent = mgGeoLoaded? '' : 'Não foi possível carregar o mapa do IBGE agora.'
 	}
 
+	let graphTimer=null; function debouncedLoadGraph(){ clearTimeout(graphTimer); graphTimer=setTimeout(loadGraph, 300) }
 	async function loadGraph(){
 		const el = document.getElementById('chartGraph')
 		const chart = echarts.init(el)
@@ -529,17 +734,33 @@
 		}
 		let nodesAll = Array.from(new Set(Array.from(edgeSet).flatMap(k=>k.split('-').map(s=>Number(s))))).map(id=>({ id:String(id), name:idToName[id]||('#'+id), value: degree[id]||1 }))
 		if(!nodesAll.length){ chart.setOption({ series:[{ type:'graph', data:[], links:[] }] }); document.getElementById('graphMsg').textContent='Sem relacionamentos.'; return }
-		const links = Array.from(edgeSet).map(k=>{ const [a,b]=k.split('-').map(s=>String(s)); return { source:a, target:b } })
-		const nodes = nodesAll.map(n=>({ ...n, symbolSize: Math.max(8, 8+(n.value||0)*2) }))
-		chart.setOption({ tooltip:{ formatter:(p)=>p.data?.name||'' }, series:[{ type:'graph', layout:'force', roam:true, label:{ show:true, position:'right', formatter:'{b}', fontSize:10 }, data:nodes, links, force:{ repulsion:120, edgeLength:[30,120] }, lineStyle:{ color:'#94a3b8' }, itemStyle:{ color:'#2563eb' } }] })
+		// aplicar filtro por membro, se houver
+		const filterName = (document.getElementById('graphFilter')?.value||'').trim()
+		let linksArr = Array.from(edgeSet).map(k=>{ const [a,b]=k.split('-').map(s=>String(s)); return { source:a, target:b } })
+		let nodesArr = nodesAll
+		if(filterName){
+			const norm = (s)=>String(s||'').normalize('NFD').replace(/[^\p{L}\p{N}\s]/gu,'').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase()
+			const key = norm(filterName)
+			let targetId = nameToId[key] || null
+			if(!targetId){
+				// tentativa por contains
+				for(const [id,nm] of Object.entries(idToName)){ if(norm(nm).includes(key)){ targetId = Number(id); break } }
+			}
+			if(!targetId){ chart.setOption({ series:[{ type:'graph', data:[], links:[] }] }); document.getElementById('graphMsg').textContent='Membro não encontrado.'; return }
+			linksArr = linksArr.filter(e=> (e.source===String(targetId) || e.target===String(targetId)))
+			const keepIds = new Set([String(targetId), ...linksArr.flatMap(e=>[e.source,e.target])])
+			nodesArr = nodesAll.filter(n=> keepIds.has(String(n.id)))
+		}
+		const nodes = nodesArr.map(n=>({ ...n, symbolSize: Math.max(8, 8+(n.value||0)*2) }))
+		chart.setOption({ tooltip:{ formatter:(p)=>p.data?.name||'' }, series:[{ type:'graph', layout:'force', roam:true, label:{ show:true, position:'right', formatter:'{b}', fontSize:10 }, data:nodes, links: linksArr, force:{ repulsion:120, edgeLength:[30,120] }, lineStyle:{ color:'#94a3b8' }, itemStyle:{ color:'#2563eb' } }] })
 		document.getElementById('graphMsg').textContent=''
 	}
 
 	// Lookups CRUD (aba Cadastros)
 	async function lkPopulate(){ try{ await fetch('/api/lookups/populate-from-membros', { method:'POST', headers:{ ...auth() } }) }catch(e){} }
 	async function lkLoadList(page=1){ const type=document.getElementById('lkType').value; const q=document.getElementById('lkQ').value.trim(); const r=await fetch(`/api/lookups?type=${encodeURIComponent(type)}&q=${encodeURIComponent(q)}&page=${page}&per_page=200`, { headers:{ ...auth() } }); const d=await r.json(); const tb=document.getElementById('lkBody'); tb.innerHTML=''; for(const it of (d.data||[])){ const tr=document.createElement('tr'); tr.innerHTML=`<td><input class='input' value=\"${String(it.value).replace(/\"/g,'&quot;')}\" data-id='${it.id}' style='width:100%'/></td><td><button class='btn' onclick='lkSave(${it.id})'>Salvar</button> <button class='btn' onclick='lkDelete(${it.id})'>Excluir</button></td>`; tb.appendChild(tr) } }
-	async function lkCreate(){ const type=document.getElementById('lkType').value; const value=document.getElementById('lkNew').value.trim(); if(!value){ toast('Informe um valor', 'error'); return } const r=await fetch('/api/lookups', { method:'POST', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ type, value }) }); if(r.ok){ document.getElementById('lkNew').value=''; toast('Adicionado', 'success'); lkLoadList() } else { toast('Falha ao adicionar', 'error') } }
-	async function lkSave(id){ const inp = document.querySelector(`[data-id="${id}"]`); const value=inp.value.trim(); const r=await fetch(`/api/lookups/${id}`, { method:'PUT', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ value }) }); if(r.ok){ toast('Salvo', 'success'); lkLoadList() } else { toast('Falha ao salvar', 'error') } }
+	async function lkCreate(){ const type=document.getElementById('lkType').value; let value=document.getElementById('lkNew').value.trim(); if(!value){ toast('Informe um valor', 'error'); return } value = value.toUpperCase(); const r=await fetch('/api/lookups', { method:'POST', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ type, value }) }); if(r.ok){ document.getElementById('lkNew').value=''; toast('Adicionado', 'success'); lkLoadList() } else { toast('Falha ao adicionar', 'error') } }
+	async function lkSave(id){ const inp = document.querySelector(`[data-id="${id}"]`); let value=inp.value.trim(); value = value.toUpperCase(); const r=await fetch(`/api/lookups/${id}`, { method:'PUT', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ value }) }); if(r.ok){ toast('Salvo', 'success'); lkLoadList() } else { toast('Falha ao salvar', 'error') } }
 	async function lkDelete(id){ if(!confirm('Excluir este valor?')) return; const r=await fetch(`/api/lookups/${id}`, { method:'DELETE', headers:{ ...auth() } }); if(r.ok){ toast('Excluído', 'success'); lkLoadList() } else { toast('Falha ao excluir', 'error') } }
 	async function lkInit(){ await lkPopulate(); lkLoadList() }
 
@@ -558,6 +779,144 @@
 	async function saveSelfPwd(){ const current_password=document.getElementById('selfPwdCurrent').value; const new_password=document.getElementById('selfPwdNew').value; const confirm=document.getElementById('selfPwdConfirm').value; if(!current_password||!new_password){ toast('Informe as senhas','error'); return } if(new_password!==confirm){ toast('Confirmação não confere','error'); return } const r=await fetch('/api/auth/change-password', { method:'POST', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ current_password, new_password, confirm }) }); if(r.ok){ toast('Senha alterada','success'); closeSelfPwd() } else { let msg='Falha ao alterar senha'; try{ const d=await r.json(); if(d?.message) msg=d.message }catch{} toast(msg,'error') } }
 
 	renderHeaderFilters(); showTab('table'); loadMe(); search(1)
+
+	let pinTimer=null; function debouncedLoadPinMap(){ clearTimeout(pinTimer); pinTimer=setTimeout(loadPinMap, 300) }
+	function featureCentroid(feat){ try{ const geom=feat.geometry; if(!geom) return null; const type=geom.type; const coords=geom.coordinates; const centroid=(arr)=>{ let x=0,y=0,n=0; for(const p of arr){ x+=p[0]; y+=p[1]; n++ } return n? [x/n,y/n] : null }; if(type==='Polygon'){ let pts=[]; for(const ring of coords){ pts.push(...ring) } return centroid(pts) } if(type==='MultiPolygon'){ let pts=[]; for(const poly of coords){ for(const ring of poly){ pts.push(...ring) } } return centroid(pts) } return null }catch(e){ return null } }
+	function normStr(s){ return String(s||'').normalize('NFD').replace(/[^\p{L}\p{N}\s]/gu,'').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase() }
+	function sanitizeComarca(raw){
+		let s = normStr(raw)
+		// remover termos comuns
+		s = s.replace(/^COMARCA\s+DA\s+/,'').replace(/^COMARCA\s+DE\s+/,'').replace(/^COMARCA\s+DO\s+/,'').replace(/^COMARCA\s+/,'')
+		// remover sufixos entre parênteses ou após traços/barras
+		s = s.replace(/\(.*?\)/g,'').replace(/\s+-\s+.*$/,'').replace(/\s+\/\s+.*$/,'').trim()
+		// mapeamentos especiais
+		const aliases = {
+			'CAPITAL': 'BELO HORIZONTE',
+			'BELO HORIZONTE (CAPITAL)': 'BELO HORIZONTE'
+		}
+		if(aliases[s]) return aliases[s]
+		return s
+	}
+	async function loadPinMap(){
+		await ensureMG()
+		const el=document.getElementById('chartPinMap'); const chart=echarts.init(el)
+		if(!mgGeoLoaded || !(mgGeoFeatures||[]).length){ chart.clear(); document.getElementById('pinMsg').textContent='Mapa do IBGE indisponível no momento.'; return }
+		// montar mapa de nome->centro da feature
+		const nameToCenter={}
+		for(const f of (mgGeoFeatures||[])){ const nm=String(f.properties?.name||''); const c=featureCentroid(f); if(nm && c) nameToCenter[normStr(nm)]=c }
+		// helper: resolver centro por igualdade ou aproximação
+		function resolveCenter(raw){ const key=normalizeKey(raw); if(!key) return null; let c=nameToCenter[key]||null; if(c) return c; for(const [munKey,center] of Object.entries(nameToCenter)){ if(key.includes(munKey) || munKey.includes(key)){ return center } } return null }
+		function normalizeKey(raw){ const s = sanitizeComarca(raw); return normStr(s) }
+		// carregar membros (sem filtros da tabela)
+		let page=1; const per=500; const maxPages=20; const rows=[]
+		try{ while(page<=maxPages){ const r=await fetch(`/api/membros?page=${page}&per_page=${per}`, { headers:{ ...auth() } }); if(!r.ok) break; const d=await r.json(); const data=d.data||[]; rows.push(...data); if(data.length<per) break; page++ } }catch{}
+		if(!rows.length){ chart.clear(); document.getElementById('pinMsg').textContent='Sem dados.'; return }
+		// pontos por membro
+		const points=[]; const idToComarcaCenter={}; const idToName={}; let notMatched=0
+		for(const r of rows){ const nome=String(r.data['Membro']||r.data['Nome']||('#'+r.id)); const comarca=String(r.data['Comarca Lotação']||''); const center=resolveCenter(comarca); idToName[r.id]=nome; if(center){ idToComarcaCenter[r.id]=center; points.push({ name:nome, value:[center[0], center[1], 1], mid:r.id, municipio: comarca }) } else { notMatched++ } }
+		if(!points.length){ chart.clear(); document.getElementById('pinMsg').textContent='Sem correspondência de comarcas no mapa.'; return }
+		// aplicar filtro por membro
+		const q=(document.getElementById('pinFilter')?.value||'').trim(); const nq=normStr(q); let focusId=null
+		if(nq){ for(const [id,nm] of Object.entries(idToName)){ if(normStr(nm).includes(nq)){ focusId=Number(id); break } } }
+		const data = points.map(p=> ({ ...p, itemStyle: { color: (focusId && p.mid===focusId)? '#dc2626' : '#0ea5e9' }, symbolSize: (focusId && p.mid===focusId)? 12 : 8 }))
+		const center = focusId? (idToComarcaCenter[focusId]||null) : null
+		chart.setOption({
+			tooltip:{ formatter:(p)=>p.data?.name||'' },
+			geo:{ map:'mg_municipios', roam:true, zoom: (focusId? 6.2 : 5.5), center: center||undefined },
+			series:[{ type:'scatter', coordinateSystem:'geo', data, emphasis:{ itemStyle:{ color:'#ef4444' } } }]
+		})
+		document.getElementById('pinMsg').textContent = (focusId? 'Pino destacado em vermelho e mapa centralizado. ' : '') + (notMatched? `${notMatched} sem correspondência.` : '')
+		// clique no pino: abrir modal com info do município
+		chart.off('click')
+		chart.on('click', async (ev)=>{
+			const nmRaw = ev?.data?.municipio || ev?.data?.name || ''
+			const nm = sanitizeComarca(nmRaw)
+			if(!nm) return
+			if(!token()){ toast('Faça login para consultar municípios','error'); location.href='/login'; return }
+			let html = `<div class='row'><strong style='font-size:16px'>${nm}</strong></div><div id='munInfo' style='margin-top:8px'>Carregando...</div>`
+			const modalBody=document.getElementById('modalBody')
+			const btnSave=document.getElementById('btnSave'); if(btnSave) btnSave.style.display='none'
+			if(modalBody){ document.getElementById('modalTitle').textContent='Município'; modalBody.innerHTML=html; document.getElementById('modal').style.display='flex' }
+			try{
+				const r=await fetch(`/api/municipios/info?nome=${encodeURIComponent(nm)}&uf=MG`, { headers:{ ...auth() } })
+				if(r.status===401||r.status===422){ document.getElementById('munInfo').textContent='Sessão expirada. Redirecionando...'; setTimeout(()=>{ localStorage.removeItem('token'); location.href='/login' }, 900); return }
+				if(!r.ok){ document.getElementById('munInfo').textContent=`Falha ao consultar (${r.status})`; return }
+				const d=await r.json(); const info=d.data||{}
+				const linkIBGE = info.links?.ibge_cidades ? `<a href='${info.links.ibge_cidades}' target='_blank' rel='noopener'>IBGE Cidades</a>` : ''
+				document.getElementById('munInfo').innerHTML = `
+					<div class='row'><div><strong>UF:</strong> ${info.uf?.sigla||''} — ${info.uf?.nome||''}</div></div>
+					<div class='row'><div><strong>Região:</strong> ${info.regiao?.sigla||''} — ${info.regiao?.nome||''}</div></div>
+					<div class='row'><div><strong>Mesorregião:</strong> ${info.mesorregiao||''}</div></div>
+					<div class='row'><div><strong>Microrregião:</strong> ${info.microrregiao||''}</div></div>
+					<div class='row'><div>${linkIBGE}</div></div>
+				`
+			}catch(e){ document.getElementById('munInfo').textContent='Erro ao consultar' }
+		})
+	}
+
+	// Histórico de movimentações
+	let histList = []
+	async function openHistory(id){
+		guard(); currentId = id
+		document.getElementById('modalTitle').textContent = `Histórico do membro #${id}`
+		document.getElementById('btnSave').style.display='none'
+		document.getElementById('modalBody').innerHTML='Carregando...'
+		document.getElementById('modal').style.display='flex'
+		await ensureLookupsLoaded()
+		await loadHistory()
+	}
+	async function loadHistory(){
+		try{ const r=await fetch(`/api/membros/${currentId}/historico`, { headers:{ ...auth() } }); const d=await r.json(); histList = d.data||[]; renderHistoryUI(d) }catch(e){ document.getElementById('modalBody').textContent='Falha ao carregar histórico' }
+	}
+	function fmtDateBR(s){ try{ if(!s) return ''; const [y,m,d]=String(s).split('-'); return `${d}/${m}/${y}` }catch{return s||''} }
+	function renderHistoryUI(meta){
+		const valsUL = (lookupCache['unidade_lotacao']||[]); const valsCL=(lookupCache['comarca_lotacao']||[])
+		let html = ''
+		html += `<div class='row'><div><strong>Concurso:</strong> ${meta?.concurso||'-'}</div><div><strong>Data de inclusão:</strong> ${fmtDateBR(meta?.data_inclusao)||'-'}</div></div>`
+		html += `<div class='timeline' id='histTL'>${(histList||[]).map(it=>(
+			`<div class='tl-item'>
+				<div class='tl-head'>${fmtDateBR(it.data_movimentacao)||'-'}</div>
+				<div class='tl-sub'>Unidade: ${it.unidade_lotacao||'-'} | Comarca: ${it.comarca_lotacao||'-'}</div>
+				${isAdmin()? `<div style='display:grid; grid-template-columns: 160px 1fr 1fr auto; gap:8px; margin-top:6px'>
+					<input type='date' class='input' value='${it.data_movimentacao||''}' data-hk='date' data-id='${it.id}' />
+					<select class='input' data-hk='ul' data-id='${it.id}'><option value=''></option>${valsUL.map(v=>`<option ${String(v)===String(it.unidade_lotacao)?'selected':''}>${v}</option>`).join('')}</select>
+					<select class='input' data-hk='cl' data-id='${it.id}'><option value=''></option>${valsCL.map(v=>`<option ${String(v)===String(it.comarca_lotacao)?'selected':''}>${v}</option>`).join('')}</select>
+					<div style='display:flex; gap:6px'>
+						<button class='btn' onclick='histSave(${it.id})'>Salvar</button>
+						<button class='btn' onclick='histDelete(${it.id})'>Excluir</button>
+					</div>
+				</div>` : ''}
+			</div>`
+		)).join('')}</div>`
+		if(isAdmin()){
+			html += `<div class='row' style='margin-top:12px'>
+				<strong>Adicionar movimentação</strong>
+				<div style='display:grid; grid-template-columns: 160px 1fr 1fr auto; gap:8px'>
+					<input type='date' class='input' id='histNewDate' />
+					<select class='input' id='histNewUL'><option value=''></option>${valsUL.map(v=>`<option>${v}</option>`).join('')}</select>
+					<select class='input' id='histNewCL'><option value=''></option>${valsCL.map(v=>`<option>${v}</option>`).join('')}</select>
+					<button class='btn' onclick='histAdd()'>Adicionar</button>
+				</div>
+			</div>`
+		}
+		document.getElementById('modalBody').innerHTML = html
+	}
+	async function histAdd(){
+		const date=(document.getElementById('histNewDate')||{}).value||''
+		const unidade_lotacao=(document.getElementById('histNewUL')||{}).value||''
+		const comarca_lotacao=(document.getElementById('histNewCL')||{}).value||''
+		if(!date){ toast('Informe a data','error'); return }
+		const r=await fetch(`/api/membros/${currentId}/historico`, { method:'POST', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify({ data_movimentacao: date, unidade_lotacao, comarca_lotacao }) })
+		if(r.ok){ toast('Movimentação adicionada','success'); loadHistory() } else { let msg=`Falha ao adicionar (${r.status})`; try{ const d=await r.json(); if(d?.message) msg=d.message }catch{}; toast(msg,'error') }
+	}
+	async function histSave(id){
+		const sel=(k)=>{ const el=document.querySelector(`[data-hk='${k}'][data-id='${id}']`); return el? el.value : '' }
+		const body={ data_movimentacao: sel('date'), unidade_lotacao: sel('ul'), comarca_lotacao: sel('cl') }
+		if(!body.data_movimentacao){ toast('Informe a data','error'); return }
+		const r=await fetch(`/api/historico/${id}`, { method:'PUT', headers:{ 'Content-Type':'application/json', ...auth() }, body: JSON.stringify(body) })
+		if(r.ok){ toast('Movimentação salva','success'); loadHistory() } else { let msg=`Falha ao salvar (${r.status})`; try{ const d=await r.json(); if(d?.message) msg=d.message }catch{}; toast(msg,'error') }
+	}
+	async function histDelete(id){ if(!confirm('Excluir esta movimentação?')) return; const r=await fetch(`/api/historico/${id}`, { method:'DELETE', headers:{ ...auth() } }); if(r.ok){ toast('Excluída','success'); loadHistory() } else { toast('Falha ao excluir','error') } }
 	</script>
 </body>
 </html> 
