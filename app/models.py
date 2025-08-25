@@ -57,6 +57,8 @@ class Membro(db.Model):
 	data_inclusao = db.Column(db.Date)
 	# nova: observação livre
 	observacao = db.Column(db.Text)
+	# nova: caminho relativo da foto dentro de static/ (ex.: uploads/membros/123/foto.jpg)
+	foto_path = db.Column(db.String(255))
 
 	amigos = db.relationship(
 		'Membro',

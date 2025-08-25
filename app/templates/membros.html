@@ -77,6 +77,9 @@
 		.tl-sub { color:#475569; font-size:12px }
 		/* richtext (observação) */
 		.rt { padding: 8px; border:1px solid #cbd5e1; border-radius:6px; min-height:160px; width:100%; box-sizing:border-box; background:#fff }
+		/* avatar/thumbnail do membro */
+		.thumb { width:28px; height:28px; border-radius:999px; object-fit:cover; border:1px solid #e2e8f0; background:#f1f5f9 }
+		.thumb-cell { display:flex; align-items:center; gap:8px }
 	</style>
 </head>
 <body>
@@ -340,7 +343,12 @@
 		for(const r of rows){
 			const tr = document.createElement('tr')
 			tr.innerHTML = `
-				<td class='freeze-left'>${r.data['Membro']||''}</td>
+				<td class='freeze-left'>
+					<div class='thumb-cell'>
+						<img class='thumb' src='${r.data['Foto URL']||"/static/silhouette.svg"}' onerror="this.onerror=null;this.src='/static/silhouette.svg'" alt='foto' />
+						<span>${r.data['Membro']||''}</span>
+					</div>
+				</td>
 				<td>${r.data['Sexo']||''}</td>
 				<td>${r.data['Concurso']||''}</td>
 				<td>${r.data['Data de inclusão']||''}</td>
@@ -444,6 +452,18 @@
 	function renderModal(){
 		const admin = isAdmin();
 		let html = `<div class='form-grid'>`
+		// bloco de foto com preview e upload (apenas admin)
+		if(admin){
+			const fotoUrl = currentData['Foto URL']||'/static/silhouette.svg'
+			html += `<div class='row' style='grid-column: 1 / -1'>
+				<label class='label'>Foto</label>
+				<div style='display:flex; gap:12px; align-items:center'>
+					<img id='fotoPreview' src='${fotoUrl}' alt='foto' style='width:96px; height:96px; border-radius:12px; object-fit:cover; border:1px solid #e2e8f0; background:#f8fafc' onerror="this.onerror=null;this.src='/static/silhouette.svg'" />
+					<input type='file' id='fotoInput' accept='image/*' class='input' style='max-width:360px' />
+					<button class='btn' onclick='uploadFoto()'>Enviar foto</button>
+				</div>
+			</div>`
+		}
 		for(const k of fields){
 			const v = currentData[k] ?? ''
 			if(k==='Observação'){
@@ -942,6 +962,20 @@
 			if(!r.ok){ let msg=`Falha ao gerar relatório (${r.status})`; try{ const t=await r.text(); if(t) msg += `: ${t.substring(0,200)}` }catch{} toast(msg,'error'); return }
 			const blob = await r.blob(); const url = URL.createObjectURL(blob); window.open(url, '_blank', 'noopener'); setTimeout(()=>URL.revokeObjectURL(url), 15000)
 		}catch(e){ toast('Erro ao gerar relatório','error') }
+	}
+
+	// upload de foto
+	function dataURLtoBlob(dataurl){ const arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1]; const bstr = atob(arr[1]); let n=bstr.length; const u8arr=new Uint8Array(n); while(n--){ u8arr[n]=bstr.charCodeAt(n) } return new Blob([u8arr], {type:mime}) }
+	async function uploadFoto(){
+		const inp = document.getElementById('fotoInput'); if(!inp||!inp.files||!inp.files[0]){ toast('Selecione uma imagem','error'); return }
+		const file = inp.files[0]
+		const fd = new FormData(); fd.append('file', file)
+		try{
+			const r = await fetch(`/api/membros/${currentId}/photo`, { method:'POST', headers:{ ...auth() }, body: fd })
+			if(!r.ok){ let msg=`Falha no upload (${r.status})`; try{ const d=await r.json(); if(d?.message) msg=d.message }catch{} toast(msg,'error'); return }
+			const d = await r.json(); const url = d.foto_url||''; const img=document.getElementById('fotoPreview'); if(img&&url){ img.src = url + `?t=${Date.now()}` }
+			toast('Foto atualizada','success');
+		}catch(e){ toast('Erro no upload','error') }
 	}
 	</script>
 </body>

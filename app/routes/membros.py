@@ -14,6 +14,8 @@ from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from reportlab.lib import colors
+import os
+from werkzeug.utils import secure_filename
 
 bp = Blueprint('membros', __name__)
 
@@ -76,10 +78,15 @@ def apply_filters(query):
 
 def to_row(m: Membro):
 	amigos = list(m.amigos)  # pode consultar
+	# montar URL da foto (se houver) servida via /static
+	foto_url = None
+	if m.foto_path:
+		foto_url = f"/static/{m.foto_path.lstrip('/')}"
 	return {
 		'id': m.id,
 		'data': {
 			'Membro': m.nome,
+			'Foto URL': foto_url,
 			'Sexo': m.sexo,
 			'Concurso': m.concurso,
 			'Cargo efetivo': m.cargo_efetivo,
@@ -332,6 +339,42 @@ def update_membro(id: int):
 		return {'success': True}
 	except Exception as e:
 		return { 'message': f'Erro ao processar: {str(e)[:200]}' }, 422
+
+
+@bp.post('/membros/<int:id>/photo')
+@jwt_required()
+def upload_photo(id: int):
+	# apenas admin pode alterar foto
+	claims = get_jwt() or {}
+	role = (claims.get('role') or '').lower()
+	if role != 'admin':
+		return { 'message': 'Apenas administradores podem enviar foto.' }, 403
+	m = Membro.query.get_or_404(id)
+	if 'file' not in request.files:
+		return { 'message': 'Arquivo não enviado (campo file)' }, 400
+	file = request.files['file']
+	if not file or file.filename == '':
+		return { 'message': 'Arquivo inválido' }, 400
+	# validar extensão simples
+	name = secure_filename(file.filename)
+	ext = os.path.splitext(name)[1].lower()
+	if ext not in ['.jpg', '.jpeg', '.png', '.webp']:
+		return { 'message': 'Extensão não suportada. Use JPG, PNG ou WEBP.' }, 400
+	# diretório destino
+	base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static', 'uploads', 'membros', str(id)))
+	os.makedirs(base_dir, exist_ok=True)
+	dest = os.path.join(base_dir, 'foto'+ext)
+	# sobrescrever arquivo
+	file.save(dest)
+	# salvar caminho relativo para servir via /static
+	rel_path = os.path.relpath(dest, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static')))
+	m.foto_path = rel_path.replace('\\','/')
+	try:
+		db.session.commit()
+	except Exception as e:
+		db.session.rollback()
+		return { 'message': f'Erro ao salvar foto: {str(e)[:200]}' }, 422
+	return { 'success': True, 'foto_url': f"/static/{m.foto_path}" }
 
 
 @bp.get('/membros/<int:id>/historico')
