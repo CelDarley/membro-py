@@ -12,7 +12,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, Image
 from reportlab.lib import colors
 import os
 from werkzeug.utils import secure_filename
@@ -487,8 +487,61 @@ def member_report_pdf(id: int):
 		story.append(t)
 		story.append(Spacer(1, 8))
 
-	# Cabeçalho
-	h('Relatório do Membro')
+	# Tentar carregar a foto do membro
+	foto_flowable = None
+	static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static'))
+	try:
+		if getattr(m, 'foto_path', None):
+			foto_abs = os.path.abspath(os.path.join(static_dir, m.foto_path))
+			if os.path.isfile(foto_abs):
+				img = Image(foto_abs)
+				# ajustar para caber em 30x30mm mantendo proporção
+				max_w, max_h = 30*mm, 30*mm
+				ratio = min(max_w/float(img.drawWidth or 1), max_h/float(img.drawHeight or 1))
+				img.drawWidth = img.drawWidth * ratio
+				img.drawHeight = img.drawHeight * ratio
+				img.hAlign = 'LEFT'
+				foto_flowable = img
+	except Exception:
+		foto_flowable = None
+
+	if not foto_flowable:
+		# tentar silhouette.* em PNG/JPG/WEBP antes do placeholder
+		for fname in ['silhouette.png','silhouette.jpg','silhouette.jpeg','silhouette.webp']:
+			cand = os.path.join(static_dir, fname)
+			if os.path.isfile(cand):
+				try:
+					img = Image(cand)
+					max_w, max_h = 30*mm, 30*mm
+					ratio = min(max_w/float(img.drawWidth or 1), max_h/float(img.drawHeight or 1))
+					img.drawWidth = img.drawWidth * ratio
+					img.drawHeight = img.drawHeight * ratio
+					img.hAlign = 'LEFT'
+					foto_flowable = img
+					break
+				except Exception:
+					pass
+		if not foto_flowable:
+			# placeholder 30x30mm caso não haja imagem
+			ph = Table([[" "]], colWidths=[30*mm], rowHeights=[30*mm])
+			ph.setStyle(TableStyle([
+				('BACKGROUND',(0,0),(0,0), colors.lightgrey),
+				('BOX',(0,0),(0,0), 0.25, colors.grey),
+			]))
+			foto_flowable = ph
+
+	# Cabeçalho com foto à esquerda e título/nome à direita
+	head = Table([
+		[foto_flowable, Paragraph(f"<b>Relatório do Membro</b><br/>{m.nome or ''}", styles['Heading3'])]
+	], colWidths=[30*mm, 150*mm])
+	head.setStyle(TableStyle([
+		('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+		('LEFTPADDING',(0,0),(-1,-1),0),
+		('RIGHTPADDING',(0,0),(-1,-1),6),
+	]))
+	story.append(head)
+	story.append(Spacer(1, 8))
+
 	row_table([
 		('Membro', m.nome),
 		('Sexo', m.sexo),
